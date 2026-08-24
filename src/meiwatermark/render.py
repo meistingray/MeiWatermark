@@ -95,12 +95,11 @@ def _font_name(path: Path) -> str:
             records = [unpack(">HHHHHH", file.read(12)) for _ in range(count)]
             names: list[str] = []
             for platform, encoding, _, name_id, length, offset in records:
-                if name_id != 1:
+                if name_id != 1 or platform != 3 or encoding not in (1, 10):
                     continue
                 file.seek(name_offset + strings_offset + offset)
                 raw = file.read(length)
-                encoding_name = "utf-16-be" if platform == 3 else "mac_roman"
-                names.append(raw.decode(encoding_name, errors="ignore"))
+                names.append(raw.decode("utf-16-be", errors="ignore"))
             return next((name for name in names if any(ord(char) > 127 for char in name)), names[0] if names else fallback)
     except (OSError, UnicodeError, ValueError):
         return fallback
@@ -156,7 +155,7 @@ def _position(layer: WatermarkLayer, base_size: tuple[int, int], stamp_size: tup
     bottom = {Anchor.BOTTOM_LEFT, Anchor.BOTTOM, Anchor.BOTTOM_RIGHT}
     x = inset_x if layer.anchor in horizontal else width - stamp_w - inset_x if layer.anchor in right else (width - stamp_w) // 2
     y = inset_y if layer.anchor in top else height - stamp_h - inset_y if layer.anchor in bottom else (height - stamp_h) // 2
-    return max(0, min(x, max(0, width - stamp_w))), max(0, min(y, max(0, height - stamp_h)))
+    return x, y
 
 
 def render(base: Image.Image, layers: list[WatermarkLayer]) -> Image.Image:
@@ -172,7 +171,11 @@ def render(base: Image.Image, layers: list[WatermarkLayer]) -> Image.Image:
         stamp = _trim_transparent(_apply_opacity(stamp, layer.opacity))
         if layer.rotation:
             stamp = _trim_transparent(stamp.rotate(-layer.rotation, expand=True, resample=Image.Resampling.BICUBIC))
-        result.alpha_composite(stamp, _position(layer, result.size, stamp.size))
+        position = _position(layer, result.size, stamp.size)
+        if 0 <= position[0] <= result.width - stamp.width and 0 <= position[1] <= result.height - stamp.height:
+            result.alpha_composite(stamp, position)
+        else:
+            result.paste(stamp, position, stamp)
     return result
 
 

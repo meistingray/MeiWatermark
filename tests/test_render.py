@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from PIL import Image
 
 from meiwatermark.model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
-from meiwatermark.render import _text_stamp, export_size, render, resize_for_export
+from meiwatermark.render import _text_stamp, export_size, render, resize_for_export, system_fonts
 
 
 class RenderTests(unittest.TestCase):
@@ -59,6 +59,19 @@ class RenderTests(unittest.TestCase):
         bounds = stamp.getchannel("A").getbbox()
         self.assertIsNotNone(bounds)
         self.assertLess(bounds[3], stamp.height)
+
+    def test_negative_inset_moves_watermark_outside_the_canvas(self) -> None:
+        base = Image.new("RGBA", (20, 20), "black")
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "red.png"
+            Image.new("RGBA", (10, 10), "red").save(path)
+            layer = WatermarkLayer(LayerKind.IMAGE, "red", image_path=str(path), size=50, anchor=Anchor.TOP_LEFT, horizontal_inset=-5, horizontal_unit=Unit.PIXELS, vertical_inset=0)
+            result = render(base, [layer])
+        self.assertGreater(result.getpixel((0, 2))[0], 0)
+        self.assertEqual(result.getpixel((6, 2))[0], 0)
+
+    def test_system_font_names_do_not_contain_null_characters(self) -> None:
+        self.assertTrue(all("\x00" not in name for name in system_fonts()))
 
 
 if __name__ == "__main__":

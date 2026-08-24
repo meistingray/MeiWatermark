@@ -69,7 +69,8 @@ class LayerRow(QWidget):
         self.setStyleSheet("background: transparent;")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(22, 0, 4, 0)
-        name = QLabel(layer.name)
+        name = QLabel(layer.text if layer.kind is LayerKind.TEXT else layer.name)
+        self.name_label = name
         name.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(name)
         layout.addStretch()
@@ -80,10 +81,10 @@ class LayerRow(QWidget):
             button.setFixedSize(30, 26)
             button.setToolTip("编辑文字水印")
             button.clicked.connect(edit)
-            layout.addWidget(button)
+            layout.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
         drag = QLabel("⠿")
         drag.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        layout.addWidget(drag)
+        layout.addWidget(drag, 0, Qt.AlignmentFlag.AlignVCenter)
 
     def mousePressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         self.owner.setCurrentItem(self.item)
@@ -203,17 +204,17 @@ class MainWindow(QMainWindow):
         form = QFormLayout(controls)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         self.size_value, self.size_unit = self._number_unit(24, ["百分比", "px"])
-        form.addRow("大小", self._pair(self.size_value, self.size_unit))
+        form.addRow("大小", self._pair(self._stepper(self.size_value, 0, 100000), self.size_unit))
         self.opacity = QLineEdit("80")
         self.opacity.setValidator(QIntValidator(0, 100, self))
-        form.addRow("透明度", self.opacity)
-        self.horizontal_value, self.horizontal_unit = self._number_unit(4, ["视觉比例", "百分比", "px"])
-        form.addRow("水平内嵌", self._pair(self.horizontal_value, self.horizontal_unit))
-        self.vertical_value, self.vertical_unit = self._number_unit(4, ["视觉比例", "百分比", "px"])
-        form.addRow("垂直内嵌", self._pair(self.vertical_value, self.vertical_unit))
+        form.addRow("透明度", self._stepper(self.opacity, 0, 100))
+        self.horizontal_value, self.horizontal_unit = self._number_unit(4, ["视觉比例", "百分比", "px"], -100000)
+        form.addRow("水平内嵌", self._pair(self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit))
+        self.vertical_value, self.vertical_unit = self._number_unit(4, ["视觉比例", "百分比", "px"], -100000)
+        form.addRow("垂直内嵌", self._pair(self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit))
         self.rotation = QLineEdit("0")
         self.rotation.setValidator(QIntValidator(-180, 180, self))
-        form.addRow("旋转", self.rotation)
+        form.addRow("旋转", self._stepper(self.rotation, -180, 180))
         layout.addWidget(controls)
         layout.addWidget(self._heading("九宫格定位"))
         grid_widget = QWidget()
@@ -304,9 +305,13 @@ class MainWindow(QMainWindow):
         self.output_path.setPlaceholderText("支持相对路径 /Mei")
         choose_output = QPushButton("选择")
         choose_output.clicked.connect(self.select_output_path)
+        clear_output = QPushButton("清空")
+        clear_output.clicked.connect(self.output_path.clear)
         output_row = QHBoxLayout()
         output_row.addWidget(QLabel("导出路径"))
-        output_row.addWidget(self._pair(self.output_path, choose_output), 1)
+        output_row.addWidget(self.output_path, 1)
+        output_row.addWidget(choose_output)
+        output_row.addWidget(clear_output)
         layout.addLayout(output_row)
         layout.addWidget(self._line())
         layout.addWidget(self._heading("预计文件大小"))
@@ -350,12 +355,32 @@ class MainWindow(QMainWindow):
         return widget
 
     @staticmethod
-    def _number_unit(value: int, units: list[str]) -> tuple[QLineEdit, QComboBox]:
+    def _number_unit(value: int, units: list[str], minimum: int = 0) -> tuple[QLineEdit, QComboBox]:
         number = QLineEdit(str(value))
-        number.setValidator(QIntValidator(0, 100000))
+        number.setValidator(QIntValidator(minimum, 100000))
         unit = QComboBox()
         unit.addItems(units)
         return number, unit
+
+    def _stepper(self, field: QLineEdit, minimum: int, maximum: int) -> QWidget:
+        field.setMaximumWidth(58)
+        wrapper = QWidget()
+        row = QHBoxLayout(wrapper)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(2)
+        for label, delta in (("−", -1), ("+", 1)):
+            button = QToolButton()
+            button.setText(label)
+            button.setObjectName("step")
+            button.setFixedSize(23, 26)
+            button.clicked.connect(lambda _, amount=delta: field.setText(str(max(minimum, min(maximum, self._number(field) + amount)))))
+            if delta < 0:
+                row.addWidget(button)
+            else:
+                plus = button
+        row.addWidget(field)
+        row.addWidget(plus)
+        return wrapper
 
     def _apply_style(self) -> None:
         self.setStyleSheet(f"""
@@ -373,6 +398,8 @@ class MainWindow(QMainWindow):
             QListWidget::item {{ padding: 5px; border-radius: 0; }}
             QListWidget::item:selected {{ background: #f5dce9; border: 1px solid {ACCENT}; }}
             QToolButton:checked {{ color: {ACCENT}; }}
+            QToolButton#step {{ min-width: 20px; border: 1px solid #d7dbe1; border-radius: 2px; background: #fff; font-weight: 600; }}
+            QToolButton#step:hover {{ border-color: {ACCENT}; color: {ACCENT}; }}
             QSlider::groove:horizontal {{ height: 3px; background: #dedede; }}
             QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background: {ACCENT}; }}
             QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
@@ -465,6 +492,9 @@ class MainWindow(QMainWindow):
         if layer is None or layer.kind is not LayerKind.TEXT:
             return
         if self.edit_text_dialog(layer):
+            row = self.layer_list.itemWidget(item)
+            if isinstance(row, LayerRow):
+                row.name_label.setText(layer.text)
             self.schedule_preview()
             self.schedule_estimate()
 
