@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from PIL import Image
 
 from meiwatermark.model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
-from meiwatermark.render import _text_stamp, export_size, render, resize_for_export, system_fonts
+from meiwatermark.render import _text_stamp, estimate_size, export_size, load_image, load_preview, load_thumbnail, render, resize_for_export, save_image, system_fonts
 
 
 class RenderTests(unittest.TestCase):
@@ -78,6 +78,31 @@ class RenderTests(unittest.TestCase):
 
     def test_system_font_names_do_not_contain_null_characters(self) -> None:
         self.assertTrue(all("\x00" not in name for name in system_fonts()))
+
+    def test_preview_and_thumbnail_are_bounded_before_display(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "portrait.jpg"
+            exif = Image.Exif()
+            exif[274] = 6
+            Image.new("RGB", (300, 600), "white").save(path, exif=exif)
+            preview = load_preview(path, (100, 80))
+            thumbnail = load_thumbnail(path, (60, 40))
+        self.assertEqual(preview.original_size, (600, 300))
+        self.assertLessEqual(preview.image.width, 100)
+        self.assertLessEqual(preview.image.height, 80)
+        self.assertLessEqual(thumbnail.width, 60)
+        self.assertLessEqual(thumbnail.height, 40)
+
+    def test_jpeg_estimate_uses_export_encoding_options(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "source.jpg"
+            target = Path(directory) / "target.jpg"
+            Image.new("RGB", (80, 60), "white").save(path)
+            source = load_image(path)
+            settings = ExportSettings(format="JPEG", quality=90)
+            estimated = estimate_size(source.image, settings, source)
+            save_image(source.image, target, settings, source)
+            self.assertEqual(estimated, target.stat().st_size)
 
 
 if __name__ == "__main__":

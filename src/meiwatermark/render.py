@@ -28,9 +28,18 @@ def load_image(path: str | Path) -> ImageSource:
 
 
 def load_preview(path: str | Path, max_size: tuple[int, int]) -> ImageSource:
-    source = load_image(path)
-    source.image.thumbnail(max_size, Image.Resampling.LANCZOS)
-    return source
+    with Image.open(path) as opened:
+        orientation = opened.getexif().get(274)
+        original_size = (opened.height, opened.width) if orientation in (5, 6, 7, 8) else opened.size
+        opened.draft("RGB", max_size)
+        opened.thumbnail(max_size, Image.Resampling.LANCZOS)
+        normalized = ImageOps.exif_transpose(opened)
+        exif = normalized.getexif().tobytes() or None
+        return ImageSource(normalized.convert("RGBA"), exif, opened.info.get("icc_profile"), original_size)
+
+
+def load_thumbnail(path: str | Path, max_size: tuple[int, int]) -> Image.Image:
+    return load_preview(path, max_size).image
 
 
 def _unit_pixels(value: float, unit: Unit, width: int, height: int, axis: str) -> int:
@@ -220,14 +229,22 @@ def save_image(image: Image.Image, destination: str | Path, settings: ExportSett
         image.save(destination, "PNG", **options)
 
 
-def estimate_size(image: Image.Image, settings: ExportSettings) -> int:
+def estimate_size(image: Image.Image, settings: ExportSettings, source: ImageSource | None = None) -> int:
     buffer = BytesIO()
     preview = resize_for_export(image, settings)
     fmt = settings.format.upper()
+    options: dict[str, object] = {}
+    if source and settings.keep_exif and source.exif:
+        options["exif"] = source.exif
+    if source and settings.keep_icc and source.icc_profile:
+        options["icc_profile"] = source.icc_profile
     if fmt == "JPEG":
-        preview.convert("RGB").save(buffer, fmt, quality=settings.quality, optimize=True, subsampling="4:2:0")
+        options.update(quality=settings.quality, optimize=True, progressive=True, subsampling="4:2:0")
+        preview.convert("RGB").save(buffer, fmt, **options)
     elif fmt == "WEBP":
-        preview.save(buffer, fmt, quality=settings.quality, method=4)
+        options.update(quality=settings.quality, method=4)
+        preview.save(buffer, fmt, **options)
     else:
-        preview.save(buffer, "PNG", compress_level=round((100 - settings.quality) * 9 / 100))
+        options["compress_level"] = round((100 - settings.quality) * 9 / 100)
+        preview.save(buffer, "PNG", **options)
     return buffer.tell()

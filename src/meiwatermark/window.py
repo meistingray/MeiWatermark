@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 
@@ -44,7 +45,7 @@ from .presets import (
     preset_directory,
     save_preset,
 )
-from .render import estimate_size, export_size, load_image, load_preview, render, system_fonts
+from .render import estimate_size, export_size, load_thumbnail, load_preview, render, system_fonts
 
 
 ACCENT = "#A40B5E"
@@ -530,7 +531,7 @@ class MainWindow(QMainWindow):
         event.acceptProposedAction()
 
     def open_images(self) -> None:
-        files, _ = QFileDialog.getOpenFileNames(self, "打开图片", "", IMAGE_FILTER)
+        files, _ = QFileDialog.getOpenFileNames(self, self.t("打开图片"), "", IMAGE_FILTER)
         self.add_paths([Path(file) for file in files])
 
     def add_paths(self, paths: list[Path]) -> None:
@@ -543,15 +544,14 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(display_image_name(path))
             item.setData(Qt.ItemDataRole.UserRole, path)
             try:
-                image = load_image(path).image
-                image.thumbnail((240, 180), Image.Resampling.LANCZOS)
+                image = load_thumbnail(path, (240, 180))
                 item.setIcon(self._pixmap(image))
             except Exception:  # noqa: BLE001
                 pass
             self.thumbnails.addItem(item)
         if self.thumbnails.currentRow() < 0:
             self.thumbnails.setCurrentRow(0)
-        self.status.showMessage(f"已导入 {len(added)} 张图片", 3000)
+        self.status.showMessage(self.t("已导入 {count} 张图片").format(count=len(added)), 3000)
 
     def select_photo(self, row: int) -> None:
         if row < 0:
@@ -562,7 +562,7 @@ class MainWindow(QMainWindow):
             self.schedule_preview()
             self.schedule_estimate()
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(self, "无法读取图片", str(exc))
+            QMessageBox.warning(self, self.t("无法读取图片"), str(exc))
 
     def remove_selected_photo(self) -> None:
         row = self.thumbnails.currentRow()
@@ -574,10 +574,10 @@ class MainWindow(QMainWindow):
             self.thumbnails.setCurrentRow(min(row, self.thumbnails.count() - 1))
         else:
             self.source = None
-            self.preview.setText("拖拽图片到窗口任意位置即可导入")
+            self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
             self.preview.setPixmap(QPixmap())
-            self.current_estimate.setText("当前照片约 —")
-            self.batch_estimate.setText("本批次约 —")
+            self.current_estimate.setText(self.t("当前照片约 —"))
+            self.batch_estimate.setText(self.t("本批次约 —"))
 
     def remove_photo_shortcut(self) -> None:
         if isinstance(self.focusWidget(), (QLineEdit, QComboBox)):
@@ -590,11 +590,11 @@ class MainWindow(QMainWindow):
             return
         self.thumbnails.setCurrentItem(item)
         menu = QMenu(self)
-        menu.addAction("从列表移除", self.remove_selected_photo)
+        menu.addAction(self.t("从列表移除"), self.remove_selected_photo)
         menu.exec(self.thumbnails.viewport().mapToGlobal(position))
 
     def add_image_layer(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "选择水印图片", "", IMAGE_FILTER)
+        path, _ = QFileDialog.getOpenFileName(self, self.t("选择水印图片"), "", IMAGE_FILTER)
         if path:
             self.add_layer(WatermarkLayer(LayerKind.IMAGE, "图片水印", image_path=path))
 
@@ -820,7 +820,7 @@ class MainWindow(QMainWindow):
         self.update_export_settings()
 
     def select_output_path(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, "选择导出路径", self.output_path.text())
+        path = QFileDialog.getExistingDirectory(self, self.t("选择导出路径"), self.output_path.text())
         if path:
             self.output_path.setText(path)
 
@@ -831,14 +831,14 @@ class MainWindow(QMainWindow):
             source_size = self.source.original_size
             sample = render(self.source.image, self._scaled_layers(self.source.image.width / source_size[0]))
             output_size = export_size(source_size, self.settings)
-            estimated = estimate_size(sample, replace(self.settings, resize_mode=ResizeMode.NONE))
+            estimated = estimate_size(sample, replace(self.settings, resize_mode=ResizeMode.NONE), self.source)
             estimated *= (output_size[0] * output_size[1]) / max(1, sample.width * sample.height)
             current = self._bytes(estimated)
-            self.current_estimate.setText(f"当前照片约 {current}")
+            self.current_estimate.setText(self.t("当前照片约 {size}").format(size=current))
             total = estimated * len(self.paths)
-            self.batch_estimate.setText(f"本批次约 {self._bytes(total * 0.85)}–{self._bytes(total * 1.15)}")
+            self.batch_estimate.setText(self.t("本批次约 {minimum}–{maximum}").format(minimum=self._bytes(total * 0.85), maximum=self._bytes(total * 1.15)))
         except Exception:  # noqa: BLE001
-            self.current_estimate.setText("当前照片约 —")
+            self.current_estimate.setText(self.t("当前照片约 —"))
 
     @staticmethod
     def _bytes(value: float) -> str:
@@ -899,23 +899,23 @@ class MainWindow(QMainWindow):
 
     def export_batch(self) -> None:
         if not self.paths:
-            QMessageBox.information(self, "没有图片", "请先打开或拖入图片。")
+            QMessageBox.information(self, self.t("没有图片"), self.t("请先打开或拖入图片。"))
             return
-        destination = self.settings.output_path or QFileDialog.getExistingDirectory(self, "选择导出目录")
+        destination = self.settings.output_path or QFileDialog.getExistingDirectory(self, self.t("选择导出路径"))
         if not destination:
             return
-        self.worker = ExportWorker(self.paths, Path(destination), list(self.layers), self.settings)
-        self.worker.progressed.connect(lambda current, total, name: self.status.showMessage(f"导出 {current}/{total}: {name}"))
+        self.worker = ExportWorker(self.paths, Path(destination), deepcopy(self.layers), replace(self.settings))
+        self.worker.progressed.connect(lambda current, total, name: self.status.showMessage(self.t("导出 {current}/{total}: {name}").format(current=current, total=total, name=name)))
         self.worker.finished_batch.connect(self.export_finished)
         self.export_button.setEnabled(False)
         self.worker.start()
 
     def export_finished(self, complete: int, failures: list[str]) -> None:
         self.export_button.setEnabled(True)
-        message = f"已导出 {complete} 张图片。"
+        message = self.t("已导出 {count} 张图片。").format(count=complete)
         if failures:
-            message += f"\n失败 {len(failures)} 张：\n" + "\n".join(failures[:3])
-        QMessageBox.information(self, "导出完成", message)
+            message += "\n" + self.t("失败 {count} 张：").format(count=len(failures)) + "\n" + "\n".join(failures[:3])
+        QMessageBox.information(self, self.t("导出完成"), message)
 
     def show_about(self) -> None:
         QMessageBox.about(

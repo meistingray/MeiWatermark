@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from PySide6.QtWidgets import QApplication
 
-from meiwatermark.model import ExportSettings, ResizeMode
+from meiwatermark.model import ExportSettings, LayerKind, ResizeMode, WatermarkLayer
 from meiwatermark.presets import save_preset
 from meiwatermark.window import MainWindow, display_image_name
 
@@ -30,6 +30,20 @@ class WindowTests(unittest.TestCase):
             self.assertFalse(window.keep_exif.isChecked())
             self.assertFalse(window.keep_icc.isChecked())
             self.assertEqual(window.output_path.text(), "/Mei")
+            window.close()
+
+    def test_export_uses_a_deep_copied_layer_snapshot(self) -> None:
+        with patch("meiwatermark.window.ExportWorker") as worker_class:
+            window = MainWindow()
+            layer = WatermarkLayer(LayerKind.TEXT, "text", text="MeiStingray")
+            window.layers = [layer]
+            window.paths = [Path("photo.jpg")]
+            window.settings = ExportSettings(output_path="/Mei")
+            window.export_batch()
+            snapshot = worker_class.call_args.args[2]
+            self.assertIsNot(snapshot[0], layer)
+            layer.opacity = 10
+            self.assertEqual(snapshot[0].opacity, 80)
             window.close()
 
 
