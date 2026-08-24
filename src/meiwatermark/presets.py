@@ -15,6 +15,12 @@ def _directory() -> Path:
     return Path(base) / "MeiWatermark"
 
 
+def preset_directory() -> Path:
+    directory = _directory()
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
 def _read(name: str) -> dict[str, object]:
     path = _directory() / name
     try:
@@ -26,8 +32,7 @@ def _read(name: str) -> dict[str, object]:
 
 
 def _write(name: str, values: dict[str, object]) -> None:
-    directory = _directory()
-    directory.mkdir(parents=True, exist_ok=True)
+    directory = preset_directory()
     (directory / name).write_text(json.dumps(values, ensure_ascii=False, indent=2), encoding="utf-8")
 
 

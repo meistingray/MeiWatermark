@@ -4,8 +4,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from PIL import Image
-from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -40,6 +40,7 @@ from .i18n import translate
 from .model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
 from .presets import (
     load_presets,
+    preset_directory,
     save_preset,
 )
 from .render import estimate_size, export_size, load_image, load_preview, render, system_fonts
@@ -213,6 +214,9 @@ class MainWindow(QMainWindow):
         save.setObjectName("presetSave")
         save.clicked.connect(self.save_preset)
         row.addWidget(save)
+        manage = QPushButton(self.t("管理"))
+        manage.clicked.connect(self.open_preset_directory)
+        row.addWidget(manage)
         return row
 
     def _body(self) -> QSplitter:
@@ -793,6 +797,9 @@ class MainWindow(QMainWindow):
                 return
             self.refresh_presets()
             self.preset.setCurrentText(name.strip())
+
+    def open_preset_directory(self) -> None:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(preset_directory())))
 
     def refresh_presets(self) -> None:
         self.preset.blockSignals(True)
