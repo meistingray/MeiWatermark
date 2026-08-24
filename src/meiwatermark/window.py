@@ -252,16 +252,14 @@ class MainWindow(QMainWindow):
         properties.setSpacing(5)
         self.size_value, self.size_unit = self._number_unit(24, [self.t("百分比"), "px"])
         properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 0, 100000), self.size_unit))
-        self.opacity = QLineEdit("80")
-        self.opacity.setValidator(QIntValidator(0, 100, self))
-        properties.addWidget(self._property_row(self.t("透明度"), self._stepper(self.opacity, 0, 100)))
         self.horizontal_value, self.horizontal_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
         properties.addWidget(self._property_row(self.t("水平内嵌"), self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit))
         self.vertical_value, self.vertical_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
         properties.addWidget(self._property_row(self.t("垂直内嵌"), self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit))
-        self.rotation = QLineEdit("0")
-        self.rotation.setValidator(QIntValidator(-180, 180, self))
-        properties.addWidget(self._property_row(self.t("旋转"), self._stepper(self.rotation, -180, 180)))
+        self.opacity, self.opacity_number = self._slider_editor(0, 100, 80)
+        properties.addWidget(self._property_row(self.t("透明度"), self._slider_widget(self.opacity, self.opacity_number)))
+        self.rotation, self.rotation_number = self._slider_editor(-180, 180, 0)
+        properties.addWidget(self._property_row(self.t("旋转"), self._slider_widget(self.rotation, self.rotation_number)))
         layout.addWidget(controls)
         layout.addWidget(self._heading(self.t("九宫格定位")))
         grid_widget = QWidget()
@@ -281,11 +279,13 @@ class MainWindow(QMainWindow):
             self.anchor_buttons.append(button)
             grid.addWidget(button, index // 3, index % 3)
         layout.addWidget(grid_widget)
-        for widget in (self.size_value, self.size_unit, self.opacity, self.horizontal_value, self.horizontal_unit, self.vertical_value, self.vertical_unit, self.rotation):
+        for widget in (self.size_value, self.size_unit, self.horizontal_value, self.horizontal_unit, self.vertical_value, self.vertical_unit):
             if isinstance(widget, QComboBox):
                 widget.currentTextChanged.connect(lambda *_: self.store_layer_controls())
             else:
                 widget.textChanged.connect(lambda *_: self.store_layer_controls())
+        for slider in (self.opacity, self.rotation):
+            slider.valueChanged.connect(self.store_layer_controls)
         return panel
 
     def _preview_panel(self) -> QWidget:
@@ -314,6 +314,7 @@ class MainWindow(QMainWindow):
         self.thumbnails.setGridSize(QSize(108, 90))
         self.thumbnails.setUniformItemSizes(True)
         self.thumbnails.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.thumbnails.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.thumbnails.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.thumbnails.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.thumbnails.setResizeMode(QListWidget.ResizeMode.Adjust)
@@ -321,9 +322,9 @@ class MainWindow(QMainWindow):
         self.thumbnails.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.thumbnails.customContextMenuRequested.connect(self.show_thumbnail_menu)
         self.thumbnails.currentRowChanged.connect(self.select_photo)
-        remove_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self.thumbnails)
-        remove_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
-        remove_shortcut.activated.connect(self.remove_selected_photo)
+        remove_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self)
+        remove_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+        remove_shortcut.activated.connect(self.remove_photo_shortcut)
         layout.addWidget(self.thumbnails)
         return panel
 
@@ -439,6 +440,26 @@ class MainWindow(QMainWindow):
         return wrapper
 
     @staticmethod
+    def _slider_editor(minimum: int, maximum: int, value: int) -> tuple[QSlider, QLabel]:
+        slider = QSlider(Qt.Orientation.Horizontal)
+        slider.setRange(minimum, maximum)
+        slider.setValue(value)
+        number = QLabel(str(value))
+        number.setFixedWidth(28)
+        number.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        return slider, number
+
+    @staticmethod
+    def _slider_widget(slider: QSlider, number: QLabel) -> QWidget:
+        widget = QWidget()
+        row = QHBoxLayout(widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(5)
+        row.addWidget(slider, 1)
+        row.addWidget(number)
+        return widget
+
+    @staticmethod
     def _property_row(label: str, editor: QWidget, unit: QComboBox | None = None) -> QWidget:
         widget = QWidget()
         widget.setObjectName("propertyRow")
@@ -473,7 +494,8 @@ class MainWindow(QMainWindow):
             QWidget#sidePanel QLabel, QWidget#sidePanel QCheckBox {{ background: transparent; }}
             QListWidget {{ background: #fff; border: 1px solid #d9dde3; border-radius: 0; padding: 2px; }}
             QListWidget::item {{ padding: 5px; border-radius: 0; }}
-            QListWidget::item:selected {{ background: #f5dce9; border: 1px solid {ACCENT}; }}
+            QListWidget::item:selected {{ background: #f5dce9; border: 1px solid {ACCENT}; color: #202124; }}
+            QListWidget::item:selected:active, QListWidget::item:selected:!active {{ color: #202124; }}
             QListWidget::item:focus {{ outline: none; }}
             QToolButton:checked {{ color: {ACCENT}; }}
             QToolButton#editLayer {{ border: none; background: transparent; padding: 0; }}
@@ -546,6 +568,11 @@ class MainWindow(QMainWindow):
             self.preview.setPixmap(QPixmap())
             self.current_estimate.setText("当前照片约 —")
             self.batch_estimate.setText("本批次约 —")
+
+    def remove_photo_shortcut(self) -> None:
+        if isinstance(self.focusWidget(), (QLineEdit, QComboBox)):
+            return
+        self.remove_selected_photo()
 
     def show_thumbnail_menu(self, position) -> None:  # type: ignore[no-untyped-def]
         item = self.thumbnails.itemAt(position)
@@ -668,12 +695,14 @@ class MainWindow(QMainWindow):
         self._loading_controls = True
         self.size_value.setText(str(round(layer.size)))
         self.size_unit.setCurrentIndex(1 if layer.size_unit is Unit.PIXELS else 0)
-        self.opacity.setText(str(layer.opacity))
+        self.opacity.setValue(layer.opacity)
+        self.opacity_number.setText(str(layer.opacity))
         self.horizontal_value.setText(str(round(layer.horizontal_inset)))
         self.horizontal_unit.setCurrentIndex({Unit.VISUAL: 0, Unit.PERCENT: 1, Unit.PIXELS: 2}[layer.horizontal_unit])
         self.vertical_value.setText(str(round(layer.vertical_inset)))
         self.vertical_unit.setCurrentIndex({Unit.VISUAL: 0, Unit.PERCENT: 1, Unit.PIXELS: 2}[layer.vertical_unit])
-        self.rotation.setText(str(round(layer.rotation)))
+        self.rotation.setValue(round(layer.rotation))
+        self.rotation_number.setText(str(round(layer.rotation)))
         self._show_anchor(layer.anchor)
         self._loading_controls = False
 
@@ -685,12 +714,14 @@ class MainWindow(QMainWindow):
             return
         layer.size = self._number(self.size_value)
         layer.size_unit = Unit.PIXELS if self.size_unit.currentIndex() == 1 else Unit.PERCENT
-        layer.opacity = self._number(self.opacity)
+        self.opacity_number.setText(str(self.opacity.value()))
+        layer.opacity = self.opacity.value()
         layer.horizontal_inset = self._number(self.horizontal_value)
         layer.horizontal_unit = (Unit.VISUAL, Unit.PERCENT, Unit.PIXELS)[self.horizontal_unit.currentIndex()]
         layer.vertical_inset = self._number(self.vertical_value)
         layer.vertical_unit = (Unit.VISUAL, Unit.PERCENT, Unit.PIXELS)[self.vertical_unit.currentIndex()]
-        layer.rotation = self._number(self.rotation)
+        self.rotation_number.setText(str(self.rotation.value()))
+        layer.rotation = self.rotation.value()
         self.schedule_preview()
         self.schedule_estimate()
 
