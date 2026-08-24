@@ -249,7 +249,7 @@ class MainWindow(QMainWindow):
         controls.setObjectName("propertyPanel")
         properties = QVBoxLayout(controls)
         properties.setContentsMargins(7, 7, 7, 7)
-        properties.setSpacing(5)
+        properties.setSpacing(8)
         self.size_value, self.size_unit = self._number_unit(24, [self.t("百分比"), "px"])
         properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 0, 100000), self.size_unit))
         self.horizontal_value, self.horizontal_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
@@ -465,16 +465,17 @@ class MainWindow(QMainWindow):
         widget.setObjectName("propertyRow")
         row = QHBoxLayout(widget)
         row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(5)
+        row.setSpacing(6)
         name = QLabel(label)
         name.setFixedWidth(52)
         row.addWidget(name)
-        row.addWidget(editor)
+        row.addWidget(editor, 1)
         if unit is not None:
             unit.setFixedWidth(74)
             row.addWidget(unit)
         else:
             row.addStretch()
+        widget.setFixedHeight(30)
         return widget
 
     def _apply_style(self) -> None:
@@ -506,7 +507,8 @@ class MainWindow(QMainWindow):
             QToolButton#anchor:checked {{ border: none; background: #f9e3ef; color: {ACCENT}; }}
             QFrame#propertyPanel {{ background: #ffffff; border: 1px solid #dfe2e7; border-radius: 3px; }}
             QFrame#propertyPanel QLabel, QWidget#propertyRow, QWidget#stepper, QWidget#anchorGrid {{ background: transparent; }}
-            QSlider::groove:horizontal {{ height: 3px; background: #dedede; }}
+            QSlider::groove:horizontal, QSlider::add-page:horizontal {{ height: 3px; background: transparent; }}
+            QSlider::sub-page:horizontal {{ height: 3px; background: {ACCENT}; }}
             QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background: {ACCENT}; }}
             QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
         """)
