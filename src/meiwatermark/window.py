@@ -273,6 +273,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._heading(self.t("九宫格定位")))
         grid_widget = QWidget()
         grid_widget.setObjectName("anchorGrid")
+        self.anchor_buttons = []
         grid = QGridLayout(grid_widget)
         grid.setContentsMargins(2, 2, 2, 2)
         grid.setSpacing(4)
@@ -284,7 +285,7 @@ class MainWindow(QMainWindow):
             button.setFixedSize(34, 34)
             button.setProperty("anchor", anchor)
             button.clicked.connect(lambda checked, value=anchor: self.set_anchor(value))
-            self.anchor_buttons = getattr(self, "anchor_buttons", []) + [button]
+            self.anchor_buttons.append(button)
             grid.addWidget(button, index // 3, index % 3)
         layout.addWidget(grid_widget)
         for widget in (self.size_value, self.size_unit, self.opacity, self.horizontal_value, self.horizontal_unit, self.vertical_value, self.vertical_unit, self.rotation):
@@ -366,7 +367,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(form)
         layout.addStretch()
         self.output_path = QLineEdit()
-        self.output_path.setPlaceholderText("支持相对路径 /Mei")
+        self.output_path.setPlaceholderText("支持相对路径 /Mei" if self.language == "zh" else "")
         choose_output = QPushButton(self.t("选择"))
         choose_output.clicked.connect(self.select_output_path)
         clear_output = QPushButton(self.t("清空"))
@@ -864,6 +865,6 @@ class MainWindow(QMainWindow):
     def show_about(self) -> None:
         QMessageBox.about(
             self,
-            f"{self.t('关于')} MeiWatermark",
-            "MeiWatermark\nVersion 0.1.0\nGPL-3.0-or-later\n©2026 MeiStingray, Kicity Studio\nwww.kicity.com",
+            "About MeiWatermark",
+            "MeiWatermark\nVersion 1.096\nGPL-3.0-or-later\n\n©2026 MeiStingray, Kicity Studio\nwww.kicity.com",
         )
