@@ -4,7 +4,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-from .window import MainWindow
+from meiwatermark.window import MainWindow
 
 
 def main() -> None:
