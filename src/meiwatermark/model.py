@@ -68,6 +68,7 @@ class ExportSettings:
     keep_exif: bool = True
     keep_icc: bool = True
     suffix: str = "_watermarked"
+    output_path: str = ""
 
 
 def default_font_path() -> str | None:

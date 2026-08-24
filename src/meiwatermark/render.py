@@ -56,6 +56,19 @@ def _font(layer: WatermarkLayer, size: int) -> ImageFont.FreeTypeFont | ImageFon
     return ImageFont.load_default()
 
 
+@lru_cache(maxsize=1)
+def system_fonts() -> dict[str, str]:
+    fonts: dict[str, str] = {}
+    directory = Path("C:/Windows/Fonts")
+    for path in [*directory.glob("*.ttf"), *directory.glob("*.otf"), *directory.glob("*.ttc")]:
+        try:
+            name = ImageFont.truetype(path, 12).getname()[0]
+            fonts.setdefault(name, str(path))
+        except OSError:
+            continue
+    return dict(sorted(fonts.items()))
+
+
 def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
     font = _font(layer, target_size)
     probe = Image.new("RGBA", (1, 1))
@@ -63,7 +76,7 @@ def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
     width, height = max(1, box[2] - box[0]), max(1, box[3] - box[1])
     stamp = Image.new("RGBA", (width + 4, height + 4))
     draw = ImageDraw.Draw(stamp)
-    draw.text((2, 2), layer.text, font=font, fill=(*layer.color, 255), stroke_width=1, stroke_fill=(*layer.stroke_color, 255))
+    draw.text((2 - box[0], 2 - box[1]), layer.text, font=font, fill=(*layer.color, 255), stroke_width=1, stroke_fill=(*layer.stroke_color, 255))
     return stamp
 
 

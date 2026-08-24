@@ -10,7 +10,7 @@ from .render import load_image, render, resize_for_export, save_image
 
 class ExportWorker(QThread):
     progressed = Signal(int, int, str)
-    finished_batch = Signal(int, list[str])
+    finished_batch = Signal(int, list)
 
     def __init__(self, paths: list[Path], destination: Path, layers: list[WatermarkLayer], settings: ExportSettings) -> None:
         super().__init__()
@@ -30,7 +30,8 @@ class ExportWorker(QThread):
             try:
                 source = load_image(path)
                 output = resize_for_export(render(source.image, self.layers), self.settings)
-                target = self.destination / f"{path.stem}{self.settings.suffix}{extension}"
+                destination = self.destination if self.destination.is_absolute() else path.parent / self.destination
+                target = destination / f"{path.stem}{self.settings.suffix}{extension}"
                 counter = 2
                 while target.exists():
                     target = self.destination / f"{path.stem}{self.settings.suffix}_{counter}{extension}"

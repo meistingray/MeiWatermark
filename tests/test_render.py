@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from PIL import Image
 
 from meiwatermark.model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
-from meiwatermark.render import export_size, render, resize_for_export
+from meiwatermark.render import _text_stamp, export_size, render, resize_for_export
 
 
 class RenderTests(unittest.TestCase):
@@ -53,6 +53,12 @@ class RenderTests(unittest.TestCase):
             layer = WatermarkLayer(LayerKind.IMAGE, "edge", image_path=str(path), size=10, anchor=Anchor.TOP_LEFT, horizontal_inset=0, vertical_inset=0)
             result = render(base, [layer])
         self.assertGreater(result.getpixel((0, 0))[0], 0)
+
+    def test_text_stamp_keeps_its_descenders_inside_the_canvas(self) -> None:
+        stamp = _text_stamp(WatermarkLayer(LayerKind.TEXT, "text", text="© 2025"), 80)
+        bounds = stamp.getchannel("A").getbbox()
+        self.assertIsNotNone(bounds)
+        self.assertLess(bounds[3], stamp.height)
 
 
 if __name__ == "__main__":

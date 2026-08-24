@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -23,7 +25,6 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
-    QMenu,
     QPushButton,
     QSizePolicy,
     QSlider,
@@ -42,7 +43,7 @@ from .presets import (
     save_export_preset,
     save_watermark_preset,
 )
-from .render import estimate_size, export_size, load_image, load_preview, render
+from .render import estimate_size, export_size, load_image, load_preview, render, system_fonts
 
 
 ACCENT = "#A40B5E"
@@ -251,6 +252,11 @@ class MainWindow(QMainWindow):
         self.keep_icc = QCheckBox("保留 ICC")
         self.keep_icc.setChecked(True)
         form.addRow(self.keep_icc)
+        self.output_path = QLineEdit()
+        self.output_path.setPlaceholderText("留空时导出前选择；output 表示原图目录/output")
+        choose_output = QPushButton("选择")
+        choose_output.clicked.connect(self.select_output_path)
+        form.addRow("导出路径", self._pair(self.output_path, choose_output))
         layout.addLayout(form)
         layout.addStretch()
         layout.addWidget(self._line())
@@ -270,6 +276,7 @@ class MainWindow(QMainWindow):
         self.allow_upscale.toggled.connect(self.update_export_settings)
         self.keep_exif.toggled.connect(self.update_export_settings)
         self.keep_icc.toggled.connect(self.update_export_settings)
+        self.output_path.textChanged.connect(self.update_export_settings)
         return panel
 
     @staticmethod
@@ -387,9 +394,9 @@ class MainWindow(QMainWindow):
             self.add_layer(WatermarkLayer(LayerKind.IMAGE, "图片水印", image_path=path))
 
     def add_text_layer(self) -> None:
-        text, accepted = QInputDialog.getText(self, "添加文字水印", "文字内容：", text="© 2025")
-        if accepted and text.strip():
-            self.add_layer(WatermarkLayer(LayerKind.TEXT, "文字水印", text=text.strip()))
+        layer = WatermarkLayer(LayerKind.TEXT, "文字水印")
+        if self.edit_text_dialog(layer):
+            self.add_layer(layer)
 
     def add_layer(self, layer: WatermarkLayer) -> None:
         self.layers.append(layer)
@@ -414,7 +421,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel(layer.name))
         layout.addStretch()
         if layer.kind is LayerKind.TEXT:
-            edit = QLabel("✎")
+            edit = QLabel("🖉")
             edit.setToolTip("双击图层编辑文字样式")
             layout.addWidget(edit)
         drag = QLabel("⠿")
@@ -427,32 +434,48 @@ class MainWindow(QMainWindow):
         layer = next((candidate for candidate in self.layers if candidate.id == layer_id), None)
         if layer is None or layer.kind is not LayerKind.TEXT:
             return
-        menu = QMenu(self)
-        edit_text = menu.addAction("编辑文字")
-        choose_font = menu.addAction("选择字体文件")
-        text_color = menu.addAction("文字颜色")
-        stroke_color = menu.addAction("边框颜色")
-        action = menu.exec(self.cursor().pos())
-        if action is edit_text:
-            text, accepted = QInputDialog.getText(self, "编辑文字水印", "文字内容：", text=layer.text)
-            if accepted and text.strip():
-                layer.text = text.strip()
-        elif action is choose_font:
-            font, _ = QFileDialog.getOpenFileName(self, "选择字体文件", "C:/Windows/Fonts", "Fonts (*.ttf *.otf *.ttc)")
-            if font:
-                layer.font_path = font
-        elif action is text_color:
-            color = QColorDialog.getColor(QColor(*layer.color), self, "文字颜色")
+        if self.edit_text_dialog(layer):
+            self.schedule_preview()
+            self.schedule_estimate()
+
+    def edit_text_dialog(self, layer: WatermarkLayer) -> bool:
+        dialog = QDialog(self)
+        dialog.setWindowTitle("文字水印")
+        form = QFormLayout(dialog)
+        text = QLineEdit(layer.text)
+        form.addRow("文字", text)
+        font = QComboBox()
+        font.addItem("系统默认", "")
+        for name, path in system_fonts().items():
+            font.addItem(name, path)
+        font.setCurrentIndex(max(0, font.findData(layer.font_path)))
+        form.addRow("字体", font)
+        text_color = QPushButton()
+        stroke_color = QPushButton()
+
+        def set_color(button: QPushButton, title: str) -> None:
+            color = QColorDialog.getColor(button.property("color"), dialog, title)
             if color.isValid():
-                layer.color = color.red(), color.green(), color.blue()
-        elif action is stroke_color:
-            color = QColorDialog.getColor(QColor(*layer.stroke_color), self, "边框颜色")
-            if color.isValid():
-                layer.stroke_color = color.red(), color.green(), color.blue()
-        else:
-            return
-        self.schedule_preview()
-        self.schedule_estimate()
+                button.setProperty("color", color)
+                button.setStyleSheet(f"background: {color.name()};")
+
+        for button, color, title in ((text_color, layer.color, "文字颜色"), (stroke_color, layer.stroke_color, "边框颜色")):
+            button.setProperty("color", QColor(*color))
+            button.setStyleSheet(f"background: rgb({color[0]}, {color[1]}, {color[2]});")
+            button.clicked.connect(lambda _, target=button, label=title: set_color(target, label))
+        form.addRow("文字颜色", text_color)
+        form.addRow("边框颜色", stroke_color)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not text.text().strip():
+            return False
+        layer.text = text.text().strip()
+        layer.font_path = font.currentData() or None
+        layer.color = tuple(text_color.property("color").getRgb()[:3])
+        layer.stroke_color = tuple(stroke_color.property("color").getRgb()[:3])
+        return True
 
     def current_layer(self) -> WatermarkLayer | None:
         item = self.layer_list.currentItem()
@@ -566,7 +589,7 @@ class MainWindow(QMainWindow):
         modes = [ResizeMode.NONE, ResizeMode.LONG_EDGE, ResizeMode.SHORT_EDGE, ResizeMode.SCALE]
         self.settings = ExportSettings(
             format=self.format.currentText(), quality=self.quality.value(), resize_mode=modes[self.resize_mode.currentIndex()],
-            resize_value=float(self.resize_value.text() or 0), allow_upscale=self.allow_upscale.isChecked(), keep_exif=self.keep_exif.isChecked(), keep_icc=self.keep_icc.isChecked(),
+            resize_value=float(self.resize_value.text() or 0), allow_upscale=self.allow_upscale.isChecked(), keep_exif=self.keep_exif.isChecked(), keep_icc=self.keep_icc.isChecked(), output_path=self.output_path.text().strip(),
         )
         self.schedule_preview()
         self.schedule_estimate()
@@ -576,6 +599,11 @@ class MainWindow(QMainWindow):
         self.resize_value_label.setText("约束数值 (%)" if ratio else "约束数值 (px)")
         self.resize_value.setText("100" if ratio else "2048")
         self.update_export_settings()
+
+    def select_output_path(self) -> None:
+        path = QFileDialog.getExistingDirectory(self, "选择导出路径", self.output_path.text())
+        if path:
+            self.output_path.setText(path)
 
     def update_estimate(self) -> None:
         if self.source is None:
@@ -649,12 +677,13 @@ class MainWindow(QMainWindow):
         self.allow_upscale.setChecked(self.settings.allow_upscale)
         self.keep_exif.setChecked(self.settings.keep_exif)
         self.keep_icc.setChecked(self.settings.keep_icc)
+        self.output_path.setText(self.settings.output_path)
 
     def export_batch(self) -> None:
         if not self.paths:
             QMessageBox.information(self, "没有图片", "请先打开或拖入图片。")
             return
-        destination = QFileDialog.getExistingDirectory(self, "选择导出目录")
+        destination = self.settings.output_path or QFileDialog.getExistingDirectory(self, "选择导出目录")
         if not destination:
             return
         self.worker = ExportWorker(self.paths, Path(destination), list(self.layers), self.settings)
