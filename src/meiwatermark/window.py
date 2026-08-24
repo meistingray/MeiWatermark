@@ -65,6 +65,7 @@ def pen_icon() -> QIcon:
 class LayerRow(QWidget):
     def __init__(self, owner: QListWidget, item: QListWidgetItem, layer: WatermarkLayer, edit) -> None:  # type: ignore[no-untyped-def]
         super().__init__()
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.owner, self.item, self.drag_start = owner, item, None
         self.setStyleSheet("background: transparent;")
         layout = QHBoxLayout(self)
@@ -189,6 +190,7 @@ class MainWindow(QMainWindow):
 
     def _layers_panel(self) -> QWidget:
         panel = QWidget()
+        panel.setObjectName("sidePanel")
         panel.setMaximumWidth(270)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(5, 5, 5, 5)
@@ -223,14 +225,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(controls)
         layout.addWidget(self._heading("九宫格定位"))
         grid_widget = QWidget()
+        grid_widget.setObjectName("anchorGrid")
         grid = QGridLayout(grid_widget)
-        grid.setSpacing(3)
+        grid.setContentsMargins(2, 2, 2, 2)
+        grid.setSpacing(4)
         for index, anchor in enumerate(Anchor):
             button = QToolButton()
             button.setObjectName("anchor")
             button.setText("○")
             button.setCheckable(True)
-            button.setFixedSize(28, 28)
+            button.setFixedSize(34, 34)
             button.setProperty("anchor", anchor)
             button.clicked.connect(lambda checked, value=anchor: self.set_anchor(value))
             self.anchor_buttons = getattr(self, "anchor_buttons", []) + [button]
@@ -274,6 +278,7 @@ class MainWindow(QMainWindow):
 
     def _export_panel(self) -> QWidget:
         panel = QWidget()
+        panel.setObjectName("sidePanel")
         panel.setMaximumWidth(290)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8, 5, 5, 5)
@@ -363,6 +368,7 @@ class MainWindow(QMainWindow):
     def _stepper(self, field: QLineEdit, minimum: int, maximum: int) -> QWidget:
         field.setMaximumWidth(58)
         wrapper = QWidget()
+        wrapper.setObjectName("stepper")
         wrapper.setFixedWidth(108)
         row = QHBoxLayout(wrapper)
         row.setContentsMargins(0, 0, 0, 0)
@@ -384,6 +390,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _property_row(label: str, editor: QWidget, unit: QComboBox | None = None) -> QWidget:
         widget = QWidget()
+        widget.setObjectName("propertyRow")
         row = QHBoxLayout(widget)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(5)
@@ -410,17 +417,21 @@ class MainWindow(QMainWindow):
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
             QLabel#heading {{ font-size: 13px; font-weight: 600; margin: 2px 0; }}
             QLabel#preview {{ background: #262a30; border: 1px solid #363b43; color: #c8ccd2; }}
+            QWidget#sidePanel {{ background: #ffffff; }}
+            QWidget#sidePanel QLabel, QWidget#sidePanel QCheckBox {{ background: transparent; }}
             QListWidget {{ background: #fff; border: 1px solid #d9dde3; border-radius: 0; padding: 2px; }}
             QListWidget::item {{ padding: 5px; border-radius: 0; }}
             QListWidget::item:selected {{ background: #f5dce9; border: 1px solid {ACCENT}; }}
+            QListWidget::item:focus {{ outline: none; }}
             QToolButton:checked {{ color: {ACCENT}; }}
             QToolButton#editLayer {{ border: none; background: transparent; padding: 0; }}
             QToolButton#editLayer:hover {{ background: #f5dce9; border-radius: 4px; }}
             QToolButton#step {{ min-width: 20px; border: 1px solid #d7dbe1; border-radius: 2px; background: #fff; font-weight: 600; }}
             QToolButton#step:hover {{ border-color: {ACCENT}; color: {ACCENT}; }}
-            QToolButton#anchor {{ border: 1px solid transparent; background: transparent; border-radius: 4px; font-size: 17px; color: #7b818a; }}
-            QToolButton#anchor:checked {{ border-color: {ACCENT}; background: #f5dce9; color: {ACCENT}; }}
+            QToolButton#anchor {{ border: none; background: transparent; border-radius: 17px; font-size: 21px; color: #7b818a; }}
+            QToolButton#anchor:checked {{ border: none; background: #f9e3ef; color: {ACCENT}; }}
             QFrame#propertyPanel {{ background: #ffffff; border: 1px solid #dfe2e7; border-radius: 3px; }}
+            QFrame#propertyPanel QLabel, QWidget#propertyRow, QWidget#stepper, QWidget#anchorGrid {{ background: transparent; }}
             QSlider::groove:horizontal {{ height: 3px; background: #dedede; }}
             QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background: {ACCENT}; }}
             QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
