@@ -12,7 +12,7 @@ TEXT = {
     "水平内嵌": {"zh": "水平内嵌", "en": "Horizontal", "es": "Horizontal", "ja": "横方向"}, "垂直内嵌": {"zh": "垂直内嵌", "en": "Vertical", "es": "Vertical", "ja": "縦方向"},
     "旋转": {"zh": "旋转", "en": "Rotation", "es": "Rotación", "ja": "回転"}, "九宫格定位": {"zh": "九宫格定位", "en": "Anchor Position", "es": "Posición de anclaje", "ja": "アンカー位置"},
     "百分比": {"zh": "百分比", "en": "Percent", "es": "Porcentaje", "ja": "パーセント"}, "视觉比例": {"zh": "视觉比例", "en": "Visual Ratio", "es": "Proporción visual", "ja": "視覚比率"},
-    "实时预览": {"zh": "实时预览", "en": "Live Preview", "es": "Vista previa", "ja": "ライブプレビュー"}, "移除照片": {"zh": "移除照片", "en": "Remove Image", "es": "Eliminar imagen", "ja": "画像を削除"},
+    "实时预览": {"zh": "实时预览", "en": "Live Preview", "es": "Vista previa", "ja": "ライブプレビュー"}, "移除照片": {"zh": "移除照片", "en": "Remove Image", "es": "Eliminar imagen", "ja": "画像を削除"}, "清空列表": {"zh": "清空列表", "en": "Clear List", "es": "Vaciar lista", "ja": "一覧をクリア"},
     "从列表移除": {"zh": "从列表移除", "en": "Remove from List", "es": "Quitar de lista", "ja": "リストから削除"},
     "已导入 {count} 张图片": {"zh": "已导入 {count} 张图片", "en": "Imported {count} images", "es": "Se importaron {count} imágenes", "ja": "{count} 枚の画像を読み込みました"},
     "无法读取图片": {"zh": "无法读取图片", "en": "Cannot Read Image", "es": "No se puede leer la imagen", "ja": "画像を読み込めません"},

@@ -5,8 +5,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from PIL import Image
-from PySide6.QtCore import QSize, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QKeySequence, QPainter, QPen, QPixmap, QShortcut
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -300,6 +300,9 @@ class MainWindow(QMainWindow):
         remove = QPushButton(self.t("移除照片"))
         remove.clicked.connect(self.remove_selected_photo)
         heading.addWidget(remove)
+        clear = QPushButton(self.t("清空列表"))
+        clear.clicked.connect(self.clear_photo_list)
+        heading.addWidget(clear)
         layout.addLayout(heading)
         self.preview = QLabel(self.t("拖拽图片到窗口任意位置即可导入"))
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -316,7 +319,7 @@ class MainWindow(QMainWindow):
         self.thumbnails.setGridSize(QSize(108, 90))
         self.thumbnails.setUniformItemSizes(True)
         self.thumbnails.setTextElideMode(Qt.TextElideMode.ElideRight)
-        self.thumbnails.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.thumbnails.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.thumbnails.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.thumbnails.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.thumbnails.setResizeMode(QListWidget.ResizeMode.Adjust)
@@ -324,9 +327,8 @@ class MainWindow(QMainWindow):
         self.thumbnails.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.thumbnails.customContextMenuRequested.connect(self.show_thumbnail_menu)
         self.thumbnails.currentRowChanged.connect(self.select_photo)
-        remove_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self)
-        remove_shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
-        remove_shortcut.activated.connect(self.remove_photo_shortcut)
+        self.thumbnails.installEventFilter(self)
+        self.thumbnails.viewport().installEventFilter(self)
         layout.addWidget(self.thumbnails)
         return panel
 
@@ -579,10 +581,20 @@ class MainWindow(QMainWindow):
             self.current_estimate.setText(self.t("当前照片约 —"))
             self.batch_estimate.setText(self.t("本批次约 —"))
 
-    def remove_photo_shortcut(self) -> None:
-        if isinstance(self.focusWidget(), (QLineEdit, QComboBox)):
-            return
-        self.remove_selected_photo()
+    def eventFilter(self, watched, event):  # type: ignore[no-untyped-def]
+        if watched in (self.thumbnails, self.thumbnails.viewport()) and event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Delete:
+            self.remove_selected_photo()
+            return True
+        return super().eventFilter(watched, event)
+
+    def clear_photo_list(self) -> None:
+        self.paths.clear()
+        self.thumbnails.clear()
+        self.source = None
+        self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
+        self.preview.setPixmap(QPixmap())
+        self.current_estimate.setText(self.t("当前照片约 —"))
+        self.batch_estimate.setText(self.t("本批次约 —"))
 
     def show_thumbnail_menu(self, position) -> None:  # type: ignore[no-untyped-def]
         item = self.thumbnails.itemAt(position)
@@ -845,7 +857,13 @@ class MainWindow(QMainWindow):
         return f"{value / 1024 / 1024:.1f} MB"
 
     def save_preset(self) -> None:
-        name, accepted = QInputDialog.getText(self, self.t("保存预设"), f"{self.t('预设名称')}:")
+        name_dialog = QInputDialog(self)
+        name_dialog.setWindowTitle(self.t("保存预设"))
+        name_dialog.setLabelText(f"{self.t('预设名称')}:")
+        name_dialog.setInputMode(QInputDialog.InputMode.TextInput)
+        name_dialog.setMinimumWidth(260)
+        accepted = name_dialog.exec() == QDialog.DialogCode.Accepted
+        name = name_dialog.textValue()
         if accepted and name.strip():
             name = name.strip()
             try:

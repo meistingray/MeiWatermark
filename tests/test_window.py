@@ -4,6 +4,9 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from PIL import Image
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from meiwatermark.model import ExportSettings, LayerKind, ResizeMode, WatermarkLayer
@@ -44,6 +47,24 @@ class WindowTests(unittest.TestCase):
             self.assertIsNot(snapshot[0], layer)
             layer.opacity = 10
             self.assertEqual(snapshot[0].opacity, 80)
+            window.close()
+
+    def test_delete_key_removes_the_selected_photo_and_clear_empties_list(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "photo.png"
+            Image.new("RGB", (12, 12), "white").save(path)
+            window = MainWindow()
+            window.add_paths([path])
+            window.show()
+            window.thumbnails.setFocus()
+            QTest.keyClick(window.thumbnails, Qt.Key.Key_Delete)
+            self.app.processEvents()
+            self.assertFalse(window.paths)
+            self.assertEqual(window.thumbnails.count(), 0)
+            window.add_paths([path])
+            window.clear_photo_list()
+            self.assertFalse(window.paths)
+            self.assertEqual(window.thumbnails.count(), 0)
             window.close()
 
 

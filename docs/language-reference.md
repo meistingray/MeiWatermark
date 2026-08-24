@@ -22,7 +22,7 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 水平内嵌 / 垂直内嵌 | Horizontal / Vertical | Horizontal / Vertical | 横方向 / 縦方向 |
 | 九宫格定位 | Anchor Position | Posición de anclaje | アンカー位置 |
 | 实时预览 | Live Preview | Vista previa | ライブプレビュー |
-| 移除照片 | Remove Image | Eliminar imagen | 画像を削除 |
+| 移除照片 / 清空列表 | Remove Image / Clear List | Eliminar imagen / Vaciar lista | 画像を削除 / 一覧をクリア |
 | 从列表移除 | Remove from List | Quitar de lista | リストから削除 |
 | 已导入 {count} 张图片 | Imported {count} images | Se importaron {count} imágenes | {count} 枚の画像を読み込みました |
 | 无法读取图片 | Cannot Read Image | No se puede leer la imagen | 画像を読み込めません |
