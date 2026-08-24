@@ -39,10 +39,8 @@ from .export import ExportWorker
 from .i18n import translate
 from .model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
 from .presets import (
-    load_export_presets,
-    load_watermark_presets,
-    save_export_preset,
-    save_watermark_preset,
+    load_presets,
+    save_preset,
 )
 from .render import estimate_size, export_size, load_image, load_preview, render, system_fonts
 
@@ -207,25 +205,13 @@ class MainWindow(QMainWindow):
         text_button.clicked.connect(self.add_text_layer)
         row.addWidget(text_button)
         row.addStretch()
-        self.watermark_preset = QComboBox()
-        self.watermark_preset.addItem(self.t("水印预设"))
-        self.watermark_preset.currentTextChanged.connect(self.apply_watermark_preset)
-        row.addWidget(self.watermark_preset)
+        self.preset = QComboBox()
+        self.preset.addItem(self.t("预设"))
+        self.preset.currentTextChanged.connect(self.apply_preset)
+        row.addWidget(self.preset)
         save = QPushButton(self.t("保存"))
         save.setObjectName("presetSave")
-        save.clicked.connect(self.save_watermark_preset)
-        row.addWidget(save)
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.VLine)
-        separator.setFixedHeight(24)
-        row.addWidget(separator)
-        self.export_preset = QComboBox()
-        self.export_preset.addItem(self.t("导出预设"))
-        self.export_preset.currentTextChanged.connect(self.apply_export_preset)
-        row.addWidget(self.export_preset)
-        save = QPushButton(self.t("保存"))
-        save.setObjectName("presetSave")
-        save.clicked.connect(self.save_export_preset)
+        save.clicked.connect(self.save_preset)
         row.addWidget(save)
         return row
 
@@ -797,51 +783,31 @@ class MainWindow(QMainWindow):
     def _bytes(value: float) -> str:
         return f"{value / 1024 / 1024:.1f} MB"
 
-    def save_watermark_preset(self) -> None:
-        name, accepted = QInputDialog.getText(self, self.t("保存水印预设"), f"{self.t('预设名称')}:")
+    def save_preset(self) -> None:
+        name, accepted = QInputDialog.getText(self, self.t("保存预设"), f"{self.t('预设名称')}:")
         if accepted and name.strip():
             try:
-                save_watermark_preset(name.strip(), self.layers)
+                save_preset(name.strip(), self.layers, self.settings)
             except OSError as exc:
                 QMessageBox.warning(self, self.t("无法保存预设"), str(exc))
                 return
             self.refresh_presets()
-            self.watermark_preset.setCurrentText(name.strip())
-
-    def save_export_preset(self) -> None:
-        name, accepted = QInputDialog.getText(self, self.t("保存导出预设"), f"{self.t('预设名称')}:")
-        if accepted and name.strip():
-            try:
-                save_export_preset(name.strip(), self.settings)
-            except OSError as exc:
-                QMessageBox.warning(self, self.t("无法保存预设"), str(exc))
-                return
-            self.refresh_presets()
-            self.export_preset.setCurrentText(name.strip())
+            self.preset.setCurrentText(name.strip())
 
     def refresh_presets(self) -> None:
-        self.watermark_preset.blockSignals(True)
-        self.export_preset.blockSignals(True)
-        self.watermark_preset.clear(); self.watermark_preset.addItem(self.t("水印预设")); self.watermark_preset.addItems(load_watermark_presets())
-        self.export_preset.clear(); self.export_preset.addItem(self.t("导出预设")); self.export_preset.addItems(load_export_presets())
-        self.watermark_preset.blockSignals(False)
-        self.export_preset.blockSignals(False)
+        self.preset.blockSignals(True)
+        self.preset.clear(); self.preset.addItem(self.t("预设")); self.preset.addItems(load_presets())
+        self.preset.blockSignals(False)
 
-    def apply_watermark_preset(self, name: str) -> None:
-        presets = load_watermark_presets()
-        if name not in presets:
+    def apply_preset(self, name: str) -> None:
+        preset = load_presets().get(name)
+        if preset is None:
             return
-        preset_layers = presets[name]
+        preset_layers, self.settings = preset
         self.layers = []
         self.layer_list.clear()
         for layer in preset_layers:
             self.add_layer(layer)
-
-    def apply_export_preset(self, name: str) -> None:
-        presets = load_export_presets()
-        if name not in presets:
-            return
-        self.settings = presets[name]
         self.format.setCurrentText(self.settings.format)
         self.quality.setValue(self.settings.quality)
         self.resize_mode.setCurrentIndex(list(ResizeMode).index(self.settings.resize_mode))

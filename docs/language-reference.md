@@ -7,10 +7,9 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 打开图片 | Open Images | Abrir | 画像を開く |
 | 添加图片水印 | Add Image Watermark | Imagen + | 画像透かしを追加 |
 | 添加文字水印 | Add Text Watermark | Texto + | テキスト透かしを追加 |
-| 水印预设 | Watermark Preset | Preajuste | 透かしプリセット |
+| 预设 | Preset | Preajuste | プリセット |
 | 保存 | Save | Guardar | 保存 |
-| 保存水印预设 / 保存导出预设 | Save Watermark Preset / Save Export Preset | Guardar preajuste de marca de agua / Guardar preajuste de exportación | 透かしプリセットを保存 / 書き出しプリセットを保存 |
-| 导出预设 | Export Preset | Exportación | 書き出しプリセット |
+| 保存预设 | Save Preset | Guardar preajuste | プリセットを保存 |
 | 水印图层 | Watermark Layers | Capas de marca de agua | 透かしレイヤー |
 | 图片水印 | Image Watermark | Imagen | 画像透かし |
 | 选中图层属性 | Selected Layer | Capa seleccionada | 選択中のレイヤー |

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 from pathlib import Path
 
@@ -10,7 +11,8 @@ from .model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, Watermar
 
 
 def _directory() -> Path:
-    return Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppConfigLocation))
+    base = os.environ.get("LOCALAPPDATA") or QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)
+    return Path(base) / "MeiWatermark"
 
 
 def _read(name: str) -> dict[str, object]:
@@ -29,50 +31,21 @@ def _write(name: str, values: dict[str, object]) -> None:
     (directory / name).write_text(json.dumps(values, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def load_watermark_presets() -> dict[str, list[WatermarkLayer]]:
-    loaded = _read("watermark-presets.json")
-    result: dict[str, list[WatermarkLayer]] = {}
-    for name, values in loaded.items():
-        if not isinstance(values, list):
+def load_presets() -> dict[str, tuple[list[WatermarkLayer], ExportSettings]]:
+    result: dict[str, tuple[list[WatermarkLayer], ExportSettings]] = {}
+    for name, values in _read("presets.json").items():
+        if not isinstance(values, dict) or not isinstance(values.get("layers"), list) or not isinstance(values.get("export"), dict):
             continue
         try:
-            result[name] = [
-                WatermarkLayer(
-                    **{
-                        **item,
-                        "kind": LayerKind(item["kind"]),
-                        "size_unit": Unit(item["size_unit"]),
-                        "horizontal_unit": Unit(item["horizontal_unit"]),
-                        "vertical_unit": Unit(item["vertical_unit"]),
-                        "anchor": Anchor(item["anchor"]),
-                    }
-                )
-                for item in values
-            ]
+            layers = [WatermarkLayer(**{**item, "kind": LayerKind(item["kind"]), "size_unit": Unit(item["size_unit"]), "horizontal_unit": Unit(item["horizontal_unit"]), "vertical_unit": Unit(item["vertical_unit"]), "anchor": Anchor(item["anchor"])}) for item in values["layers"]]
+            settings = ExportSettings(**{**values["export"], "resize_mode": ResizeMode(values["export"]["resize_mode"])})
+            result[name] = layers, settings
         except (KeyError, TypeError, ValueError):
             continue
     return result
 
 
-def save_watermark_preset(name: str, layers: list[WatermarkLayer]) -> None:
-    presets = _read("watermark-presets.json")
-    presets[name] = [asdict(layer) for layer in layers]
-    _write("watermark-presets.json", presets)
-
-
-def load_export_presets() -> dict[str, ExportSettings]:
-    loaded = _read("export-presets.json")
-    result: dict[str, ExportSettings] = {}
-    for name, values in loaded.items():
-        if isinstance(values, dict):
-            try:
-                result[name] = ExportSettings(**{**values, "resize_mode": ResizeMode(values["resize_mode"])})
-            except (KeyError, TypeError, ValueError):
-                continue
-    return result
-
-
-def save_export_preset(name: str, settings: ExportSettings) -> None:
-    presets = _read("export-presets.json")
-    presets[name] = asdict(settings)
-    _write("export-presets.json", presets)
+def save_preset(name: str, layers: list[WatermarkLayer], settings: ExportSettings) -> None:
+    presets = _read("presets.json")
+    presets[name] = {"layers": [asdict(layer) for layer in layers], "export": asdict(settings)}
+    _write("presets.json", presets)
