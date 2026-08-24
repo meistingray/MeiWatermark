@@ -336,6 +336,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(8, 5, 5, 5)
         layout.addWidget(self._heading(self.t("导出设置")))
         form = QFormLayout()
+        form.setVerticalSpacing(8)
         self.format = QComboBox()
         self.format.addItems(["JPEG", "PNG", "WEBP"])
         form.addRow(self.t("格式"), self.format)
@@ -343,8 +344,12 @@ class MainWindow(QMainWindow):
         self.quality.setRange(1, 100)
         self.quality.setValue(100)
         self.quality_number = QLabel("100")
+        self.quality_number.setFixedWidth(28)
+        self.quality_number.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         quality_row = QHBoxLayout()
-        quality_row.addWidget(self.quality)
+        quality_row.setContentsMargins(0, 0, 0, 0)
+        quality_row.setSpacing(5)
+        quality_row.addWidget(self.quality, 1)
         quality_row.addWidget(self.quality_number)
         form.addRow(self.t("质量"), quality_row)
         self.resize_mode = QComboBox()
@@ -480,7 +485,7 @@ class MainWindow(QMainWindow):
 
     def _apply_style(self) -> None:
         self.setStyleSheet(f"""
-            QWidget {{ font-size: 12px; color: #202124; }}
+            QWidget {{ font-size: 9pt; color: #202124; }}
             QMainWindow, QWidget {{ background: #f5f6f8; }}
             QMenuBar {{ background: #ffffff; border-bottom: 1px solid #e3e5e8; padding: 1px 3px; }}
             QMenuBar::item {{ padding: 4px 8px; background: transparent; }}
@@ -489,8 +494,8 @@ class MainWindow(QMainWindow):
             QPushButton:hover, QComboBox:hover {{ border-color: {ACCENT}; }}
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
             QPushButton#presetSave {{ color: {ACCENT}; border-color: {ACCENT}; font-weight: 600; }}
-            QLabel#heading {{ font-size: 13px; font-weight: 600; margin: 2px 0; }}
-            QLabel#preview {{ background: #262a30; border: 1px solid #363b43; color: #c8ccd2; }}
+            QLabel#heading {{ font-size: 10pt; font-weight: 600; margin: 2px 0; }}
+            QLabel#preview {{ font-size: 10pt; background: #262a30; border: 1px solid #363b43; color: #c8ccd2; }}
             QWidget#sidePanel {{ background: #ffffff; }}
             QWidget#sidePanel QLabel, QWidget#sidePanel QCheckBox {{ background: transparent; }}
             QListWidget {{ background: #fff; border: 1px solid #d9dde3; border-radius: 0; padding: 2px; }}
@@ -503,12 +508,13 @@ class MainWindow(QMainWindow):
             QToolButton#editLayer:hover {{ background: #f5dce9; border-radius: 4px; }}
             QToolButton#step {{ min-width: 20px; border: 1px solid #d7dbe1; border-radius: 2px; background: #fff; font-weight: 600; }}
             QToolButton#step:hover {{ border-color: {ACCENT}; color: {ACCENT}; }}
-            QToolButton#anchor {{ border: none; background: transparent; border-radius: 17px; font-size: 21px; color: #7b818a; }}
+            QToolButton#anchor {{ border: none; background: transparent; border-radius: 17px; font-size: 16pt; color: #7b818a; }}
             QToolButton#anchor:checked {{ border: none; background: #f9e3ef; color: {ACCENT}; }}
             QFrame#propertyPanel {{ background: #ffffff; border: 1px solid #dfe2e7; border-radius: 3px; }}
             QFrame#propertyPanel QLabel, QWidget#propertyRow, QWidget#stepper, QWidget#anchorGrid {{ background: transparent; }}
-            QSlider::groove:horizontal, QSlider::add-page:horizontal {{ height: 3px; background: transparent; }}
-            QSlider::sub-page:horizontal {{ height: 3px; background: {ACCENT}; }}
+            QSlider, QSlider::groove:horizontal, QSlider::add-page:horizontal {{ border: none; background: rgba(0, 0, 0, 0); }}
+            QSlider::groove:horizontal, QSlider::add-page:horizontal, QSlider::sub-page:horizontal {{ height: 3px; }}
+            QSlider::sub-page:horizontal {{ border: none; background: {ACCENT}; }}
             QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background: {ACCENT}; }}
             QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
         """)
