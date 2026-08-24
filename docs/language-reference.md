@@ -12,7 +12,7 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 水印图层 | Watermark Layers | Capas de marca | 透かしレイヤー |
 | 选中图层属性 | Selected Layer | Capa seleccionada | 選択中のレイヤー |
 | 大小 / 透明度 / 旋转 | Size / Opacity / Rotation | Tamaño / Opacidad / Rotación | サイズ / 不透明度 / 回転 |
-| 水平内嵌 / 垂直内嵌 | Horizontal / Vertical Inset | Margen horizontal / vertical | 横方向 / 縦方向の余白 |
+| 水平内嵌 / 垂直内嵌 | Horizontal / Vertical | Horizontal / Vertical | 横方向 / 縦方向 |
 | 九宫格定位 | Anchor Position | Posición de anclaje | アンカー位置 |
 | 实时预览 | Live Preview | Vista previa | ライブプレビュー |
 | 移除照片 | Remove Image | Quitar imagen | 画像を取り除く |
@@ -20,6 +20,7 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 导出设置 | Export Settings | Ajustes de exportación | 書き出し設定 |
 | 格式 / 质量 | Format / Quality | Formato / Calidad | 形式 / 品質 |
 | 尺寸约束 | Resize Limit | Límite de tamaño | サイズ制限 |
+| 约束数值 | Limit | Límite | 制限値 |
 | 不约束 / 最长边 / 最短边 / 比例 | No Limit / Long Edge / Short Edge / Scale | Sin límite / Lado largo / Lado corto / Escala | 制限なし / 長辺 / 短辺 / 倍率 |
 | 导出路径 | Export Path | Ruta de exportación | 書き出し先 |
 | 预计文件大小 | Estimated File Size | Tamaño estimado | 推定ファイルサイズ |

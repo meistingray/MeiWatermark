@@ -352,7 +352,7 @@ class MainWindow(QMainWindow):
         self.resize_value = QLineEdit()
         self.resize_value.setValidator(QIntValidator(1, 100000, self))
         self.resize_value.setEnabled(False)
-        self.resize_value_label = QLabel("约束数值 (px)")
+        self.resize_value_label = QLabel(f"{self.t('约束数值')} (px)")
         form.addRow(self.resize_value_label, self.resize_value)
         self.allow_upscale = QCheckBox(self.t("不放大"))
         form.addRow(self.allow_upscale)
@@ -757,7 +757,7 @@ class MainWindow(QMainWindow):
     def resize_mode_changed(self) -> None:
         index = self.resize_mode.currentIndex()
         ratio = index == 3
-        self.resize_value_label.setText("约束数值 (%)" if ratio else "约束数值 (px)")
+        self.resize_value_label.setText(f"{self.t('约束数值')} ({'%' if ratio else 'px'})")
         self.resize_value.setText("" if index == 0 else "100" if ratio else "2048")
         self.update_export_settings()
 
