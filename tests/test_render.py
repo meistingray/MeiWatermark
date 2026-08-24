@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from PIL import Image
+
+from meiwatermark.model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
+from meiwatermark.render import export_size, render, resize_for_export
+
+
+class RenderTests(unittest.TestCase):
+    def test_visual_inset_uses_short_edge(self) -> None:
+        base = Image.new("RGBA", (1000, 500), "black")
+        layer = WatermarkLayer(LayerKind.TEXT, "text", text="X", size=10, horizontal_inset=10, horizontal_unit=Unit.VISUAL, vertical_inset=10, vertical_unit=Unit.VISUAL, anchor=Anchor.BOTTOM_RIGHT)
+        result = render(base, [layer])
+        self.assertEqual(result.size, base.size)
+
+    def test_resize_long_edge_keeps_ratio(self) -> None:
+        image = Image.new("RGBA", (4000, 2000))
+        settings = ExportSettings(resize_mode=ResizeMode.LONG_EDGE, resize_value=1000)
+        self.assertEqual(resize_for_export(image, settings).size, (1000, 500))
+
+    def test_resize_does_not_upscale_by_default(self) -> None:
+        image = Image.new("RGBA", (100, 50))
+        settings = ExportSettings(resize_mode=ResizeMode.LONG_EDGE, resize_value=1000)
+        self.assertEqual(resize_for_export(image, settings).size, image.size)
+
+    def test_export_size_for_short_edge(self) -> None:
+        settings = ExportSettings(resize_mode=ResizeMode.SHORT_EDGE, resize_value=1000)
+        self.assertEqual(export_size((6000, 4000), settings), (1500, 1000))
+
+    def test_topmost_layer_is_the_first_one_in_the_list(self) -> None:
+        base = Image.new("RGBA", (200, 100), "black")
+        with TemporaryDirectory() as directory:
+            red_path = Path(directory) / "red.png"
+            green_path = Path(directory) / "green.png"
+            Image.new("RGBA", (20, 20), "red").save(red_path)
+            Image.new("RGBA", (20, 20), "green").save(green_path)
+            bottom = WatermarkLayer(LayerKind.IMAGE, "bottom", image_path=str(green_path), size=50, anchor=Anchor.TOP_LEFT, horizontal_inset=0, vertical_inset=0)
+            top = WatermarkLayer(LayerKind.IMAGE, "top", image_path=str(red_path), size=50, anchor=Anchor.TOP_LEFT, horizontal_inset=0, vertical_inset=0)
+            result = render(base, [top, bottom])
+        self.assertGreater(result.getpixel((10, 10))[0], result.getpixel((10, 10))[1])
+
+    def test_zero_inset_places_visible_watermark_content_at_edge(self) -> None:
+        base = Image.new("RGBA", (100, 100), "black")
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "padded.png"
+            stamp = Image.new("RGBA", (20, 20))
+            stamp.alpha_composite(Image.new("RGBA", (10, 10), "red"), (5, 5))
+            stamp.save(path)
+            layer = WatermarkLayer(LayerKind.IMAGE, "edge", image_path=str(path), size=10, anchor=Anchor.TOP_LEFT, horizontal_inset=0, vertical_inset=0)
+            result = render(base, [layer])
+        self.assertGreater(result.getpixel((0, 0))[0], 0)
+
+
+if __name__ == "__main__":
+    unittest.main()
