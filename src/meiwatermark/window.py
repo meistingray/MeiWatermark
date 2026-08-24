@@ -76,9 +76,12 @@ class LayerRow(QWidget):
         layout.addStretch()
         if layer.kind is LayerKind.TEXT:
             button = QToolButton()
+            button.setObjectName("editLayer")
             button.setIcon(pen_icon())
-            button.setIconSize(QSize(18, 18))
-            button.setFixedSize(30, 26)
+            button.setIconSize(QSize(20, 20))
+            button.setFixedSize(28, 28)
+            button.setAutoRaise(True)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.setToolTip("编辑文字水印")
             button.clicked.connect(edit)
             layout.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -200,21 +203,23 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.layer_list, 1)
         layout.addWidget(self._line())
         layout.addWidget(self._heading("选中图层属性"))
-        controls = QWidget()
-        form = QFormLayout(controls)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        controls = QFrame()
+        controls.setObjectName("propertyPanel")
+        properties = QVBoxLayout(controls)
+        properties.setContentsMargins(7, 7, 7, 7)
+        properties.setSpacing(5)
         self.size_value, self.size_unit = self._number_unit(24, ["百分比", "px"])
-        form.addRow("大小", self._pair(self._stepper(self.size_value, 0, 100000), self.size_unit))
+        properties.addWidget(self._property_row("大小", self._stepper(self.size_value, 0, 100000), self.size_unit))
         self.opacity = QLineEdit("80")
         self.opacity.setValidator(QIntValidator(0, 100, self))
-        form.addRow("透明度", self._stepper(self.opacity, 0, 100))
+        properties.addWidget(self._property_row("透明度", self._stepper(self.opacity, 0, 100)))
         self.horizontal_value, self.horizontal_unit = self._number_unit(4, ["视觉比例", "百分比", "px"], -100000)
-        form.addRow("水平内嵌", self._pair(self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit))
+        properties.addWidget(self._property_row("水平内嵌", self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit))
         self.vertical_value, self.vertical_unit = self._number_unit(4, ["视觉比例", "百分比", "px"], -100000)
-        form.addRow("垂直内嵌", self._pair(self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit))
+        properties.addWidget(self._property_row("垂直内嵌", self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit))
         self.rotation = QLineEdit("0")
         self.rotation.setValidator(QIntValidator(-180, 180, self))
-        form.addRow("旋转", self._stepper(self.rotation, -180, 180))
+        properties.addWidget(self._property_row("旋转", self._stepper(self.rotation, -180, 180)))
         layout.addWidget(controls)
         layout.addWidget(self._heading("九宫格定位"))
         grid_widget = QWidget()
@@ -222,8 +227,10 @@ class MainWindow(QMainWindow):
         grid.setSpacing(3)
         for index, anchor in enumerate(Anchor):
             button = QToolButton()
-            button.setText("●")
+            button.setObjectName("anchor")
+            button.setText("○")
             button.setCheckable(True)
+            button.setFixedSize(28, 28)
             button.setProperty("anchor", anchor)
             button.clicked.connect(lambda checked, value=anchor: self.set_anchor(value))
             self.anchor_buttons = getattr(self, "anchor_buttons", []) + [button]
@@ -346,15 +353,6 @@ class MainWindow(QMainWindow):
         return line
 
     @staticmethod
-    def _pair(first: QWidget, second: QWidget) -> QWidget:
-        widget = QWidget()
-        row = QHBoxLayout(widget)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.addWidget(first)
-        row.addWidget(second)
-        return widget
-
-    @staticmethod
     def _number_unit(value: int, units: list[str], minimum: int = 0) -> tuple[QLineEdit, QComboBox]:
         number = QLineEdit(str(value))
         number.setValidator(QIntValidator(minimum, 100000))
@@ -365,6 +363,7 @@ class MainWindow(QMainWindow):
     def _stepper(self, field: QLineEdit, minimum: int, maximum: int) -> QWidget:
         field.setMaximumWidth(58)
         wrapper = QWidget()
+        wrapper.setFixedWidth(108)
         row = QHBoxLayout(wrapper)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(2)
@@ -382,6 +381,23 @@ class MainWindow(QMainWindow):
         row.addWidget(plus)
         return wrapper
 
+    @staticmethod
+    def _property_row(label: str, editor: QWidget, unit: QComboBox | None = None) -> QWidget:
+        widget = QWidget()
+        row = QHBoxLayout(widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(5)
+        name = QLabel(label)
+        name.setFixedWidth(52)
+        row.addWidget(name)
+        row.addWidget(editor)
+        if unit is not None:
+            unit.setFixedWidth(74)
+            row.addWidget(unit)
+        else:
+            row.addStretch()
+        return widget
+
     def _apply_style(self) -> None:
         self.setStyleSheet(f"""
             QWidget {{ font-size: 12px; color: #202124; }}
@@ -398,8 +414,13 @@ class MainWindow(QMainWindow):
             QListWidget::item {{ padding: 5px; border-radius: 0; }}
             QListWidget::item:selected {{ background: #f5dce9; border: 1px solid {ACCENT}; }}
             QToolButton:checked {{ color: {ACCENT}; }}
+            QToolButton#editLayer {{ border: none; background: transparent; padding: 0; }}
+            QToolButton#editLayer:hover {{ background: #f5dce9; border-radius: 4px; }}
             QToolButton#step {{ min-width: 20px; border: 1px solid #d7dbe1; border-radius: 2px; background: #fff; font-weight: 600; }}
             QToolButton#step:hover {{ border-color: {ACCENT}; color: {ACCENT}; }}
+            QToolButton#anchor {{ border: 1px solid transparent; background: transparent; border-radius: 4px; font-size: 17px; color: #7b818a; }}
+            QToolButton#anchor:checked {{ border-color: {ACCENT}; background: #f5dce9; color: {ACCENT}; }}
+            QFrame#propertyPanel {{ background: #ffffff; border: 1px solid #dfe2e7; border-radius: 3px; }}
             QSlider::groove:horizontal {{ height: 3px; background: #dedede; }}
             QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background: {ACCENT}; }}
             QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
@@ -565,8 +586,7 @@ class MainWindow(QMainWindow):
         self.vertical_value.setText(str(round(layer.vertical_inset)))
         self.vertical_unit.setCurrentText({Unit.VISUAL: "视觉比例", Unit.PERCENT: "百分比", Unit.PIXELS: "px"}[layer.vertical_unit])
         self.rotation.setText(str(round(layer.rotation)))
-        for button in self.anchor_buttons:
-            button.setChecked(button.property("anchor") is layer.anchor)
+        self._show_anchor(layer.anchor)
         self._loading_controls = False
 
     def store_layer_controls(self) -> None:
@@ -595,10 +615,15 @@ class MainWindow(QMainWindow):
         if layer is None:
             return
         layer.anchor = anchor
-        for button in self.anchor_buttons:
-            button.setChecked(button.property("anchor") is anchor)
+        self._show_anchor(anchor)
         self.schedule_preview()
         self.schedule_estimate()
+
+    def _show_anchor(self, anchor: Anchor) -> None:
+        for button in self.anchor_buttons:
+            selected = button.property("anchor") == anchor
+            button.setChecked(selected)
+            button.setText("●" if selected else "○")
 
     def sync_layer_order(self) -> None:
         order = [self.layer_list.item(index).data(Qt.ItemDataRole.UserRole) for index in range(self.layer_list.count())]
