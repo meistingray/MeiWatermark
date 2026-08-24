@@ -45,9 +45,9 @@ class WatermarkLayer:
     opacity: int = 80
     size: float = 20
     size_unit: Unit = Unit.PERCENT
-    horizontal_inset: float = 4
+    horizontal_inset: float = 2
     horizontal_unit: Unit = Unit.VISUAL
-    vertical_inset: float = 4
+    vertical_inset: float = 2
     vertical_unit: Unit = Unit.VISUAL
     anchor: Anchor = Anchor.BOTTOM_RIGHT
     rotation: float = 0

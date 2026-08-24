@@ -4,11 +4,11 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 
 | 中文 | English | Español | 日本語 |
 | --- | --- | --- | --- |
-| 打开图片 | Open Images | Abrir imágenes | 画像を開く |
-| 添加图片水印 | Add Image Watermark | Añadir marca de agua de imagen | 画像透かしを追加 |
-| 添加文字水印 | Add Text Watermark | Añadir marca de agua de texto | テキスト透かしを追加 |
-| 水印预设 | Watermark Preset | Preajuste de marca de agua | 透かしプリセット |
-| 导出预设 | Export Preset | Preajuste de exportación | 書き出しプリセット |
+| 打开图片 | Open Images | Abrir | 画像を開く |
+| 添加图片水印 | Add Image Watermark | Imagen + | 画像透かしを追加 |
+| 添加文字水印 | Add Text Watermark | Texto + | テキスト透かしを追加 |
+| 水印预设 | Watermark Preset | Preajuste | 透かしプリセット |
+| 导出预设 | Export Preset | Exportación | 書き出しプリセット |
 | 水印图层 | Watermark Layers | Capas de marca de agua | 透かしレイヤー |
 | 选中图层属性 | Selected Layer | Capa seleccionada | 選択中のレイヤー |
 | 大小 / 透明度 / 旋转 | Size / Opacity / Rotation | Tamaño / Opacidad / Rotación | サイズ / 不透明度 / 回転 |

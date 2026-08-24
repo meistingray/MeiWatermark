@@ -61,22 +61,22 @@ def pen_icon() -> QIcon:
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(QPen(QColor(ACCENT), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-    painter.drawLine(7, 17, 17, 7)
+    painter.drawLine(7, 14, 17, 4)
     painter.setPen(QPen(QColor("#5b0635"), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
-    painter.drawLine(5, 19, 8, 16)
+    painter.drawLine(5, 16, 8, 13)
     painter.end()
     return QIcon(pixmap)
 
 
 class LayerRow(QWidget):
-    def __init__(self, owner: QListWidget, item: QListWidgetItem, layer: WatermarkLayer, edit, edit_tooltip: str) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, owner: QListWidget, item: QListWidgetItem, layer: WatermarkLayer, edit, name_text: str, edit_tooltip: str) -> None:  # type: ignore[no-untyped-def]
         super().__init__()
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.owner, self.item, self.drag_start = owner, item, None
         self.setStyleSheet("background: transparent;")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(22, 0, 4, 0)
-        name = QLabel(layer.text if layer.kind is LayerKind.TEXT else layer.name)
+        name = QLabel(name_text)
         self.name_label = name
         name.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(name)
@@ -212,6 +212,7 @@ class MainWindow(QMainWindow):
         self.watermark_preset.currentTextChanged.connect(self.apply_watermark_preset)
         row.addWidget(self.watermark_preset)
         save = QPushButton(self.t("保存水印预设"))
+        save.setObjectName("presetSave")
         save.clicked.connect(self.save_watermark_preset)
         row.addWidget(save)
         separator = QFrame()
@@ -223,6 +224,7 @@ class MainWindow(QMainWindow):
         self.export_preset.currentTextChanged.connect(self.apply_export_preset)
         row.addWidget(self.export_preset)
         save = QPushButton(self.t("保存导出预设"))
+        save.setObjectName("presetSave")
         save.clicked.connect(self.save_export_preset)
         row.addWidget(save)
         return row
@@ -262,9 +264,9 @@ class MainWindow(QMainWindow):
         self.opacity = QLineEdit("80")
         self.opacity.setValidator(QIntValidator(0, 100, self))
         properties.addWidget(self._property_row(self.t("透明度"), self._stepper(self.opacity, 0, 100)))
-        self.horizontal_value, self.horizontal_unit = self._number_unit(4, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
+        self.horizontal_value, self.horizontal_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
         properties.addWidget(self._property_row(self.t("水平内嵌"), self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit))
-        self.vertical_value, self.vertical_unit = self._number_unit(4, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
+        self.vertical_value, self.vertical_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
         properties.addWidget(self._property_row(self.t("垂直内嵌"), self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit))
         self.rotation = QLineEdit("0")
         self.rotation.setValidator(QIntValidator(-180, 180, self))
@@ -468,6 +470,7 @@ class MainWindow(QMainWindow):
             QPushButton, QComboBox, QLineEdit {{ min-height: 24px; border: 1px solid #d7dbe1; border-radius: 2px; padding: 1px 7px; background: #fff; }}
             QPushButton:hover, QComboBox:hover {{ border-color: {ACCENT}; }}
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
+            QPushButton#presetSave {{ color: {ACCENT}; border-color: {ACCENT}; font-weight: 600; }}
             QLabel#heading {{ font-size: 13px; font-weight: 600; margin: 2px 0; }}
             QLabel#preview {{ background: #262a30; border: 1px solid #363b43; color: #c8ccd2; }}
             QWidget#sidePanel {{ background: #ffffff; }}
@@ -563,7 +566,7 @@ class MainWindow(QMainWindow):
             self.add_layer(WatermarkLayer(LayerKind.IMAGE, "图片水印", image_path=path))
 
     def add_text_layer(self) -> None:
-        layer = WatermarkLayer(LayerKind.TEXT, "文字水印")
+        layer = WatermarkLayer(LayerKind.TEXT, "文字水印", text="MeiStingray")
         if self.edit_text_dialog(layer):
             self.add_layer(layer)
 
@@ -575,7 +578,8 @@ class MainWindow(QMainWindow):
         item.setCheckState(Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked)
         item.setSizeHint(QSize(0, 28))
         self.layer_list.addItem(item)
-        self.layer_list.setItemWidget(item, LayerRow(self.layer_list, item, layer, lambda: self.edit_text_layer(item), self.t("编辑文字水印")))
+        layer_label = layer.text if layer.kind is LayerKind.TEXT else self.t(layer.name)
+        self.layer_list.setItemWidget(item, LayerRow(self.layer_list, item, layer, lambda: self.edit_text_layer(item), layer_label, self.t("编辑文字水印")))
         self.layer_list.setCurrentItem(item)
         self.schedule_preview()
         self.schedule_estimate()
@@ -789,23 +793,23 @@ class MainWindow(QMainWindow):
         return f"{value / 1024 / 1024:.1f} MB"
 
     def save_watermark_preset(self) -> None:
-        name, accepted = QInputDialog.getText(self, "保存水印预设", "预设名称：")
+        name, accepted = QInputDialog.getText(self, self.t("保存水印预设"), f"{self.t('预设名称')}:")
         if accepted and name.strip():
             try:
                 save_watermark_preset(name.strip(), self.layers)
             except OSError as exc:
-                QMessageBox.warning(self, "无法保存预设", str(exc))
+                QMessageBox.warning(self, self.t("无法保存预设"), str(exc))
                 return
             self.refresh_presets()
             self.watermark_preset.setCurrentText(name.strip())
 
     def save_export_preset(self) -> None:
-        name, accepted = QInputDialog.getText(self, "保存导出预设", "预设名称：")
+        name, accepted = QInputDialog.getText(self, self.t("保存导出预设"), f"{self.t('预设名称')}:")
         if accepted and name.strip():
             try:
                 save_export_preset(name.strip(), self.settings)
             except OSError as exc:
-                QMessageBox.warning(self, "无法保存预设", str(exc))
+                QMessageBox.warning(self, self.t("无法保存预设"), str(exc))
                 return
             self.refresh_presets()
             self.export_preset.setCurrentText(name.strip())
