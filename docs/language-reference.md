@@ -33,4 +33,6 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 预计文件大小 | Estimated File Size | Tamaño estimado | 推定ファイルサイズ |
 | 文字 / 字体 | Text / Font | Texto / Fuente | テキスト / フォント |
 | 文字颜色 / 边框颜色 | Text Color / Outline Color | Color del texto / Color del borde | 文字色 / 縁取り色 |
+| 无颜色 | None | Ninguno | なし |
+| 边框宽度 | Outline Width | Grosor del borde | 輪郭の太さ |
 | 系统默认 | Default | Predeterminado | システム既定 |

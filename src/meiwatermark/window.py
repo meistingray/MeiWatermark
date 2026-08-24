@@ -606,6 +606,10 @@ class MainWindow(QMainWindow):
         form.addRow(self.t("字体"), font)
         text_color = QPushButton()
         stroke_color = QPushButton()
+        text_none = QCheckBox(self.t("无颜色"))
+        stroke_none = QCheckBox(self.t("无颜色"))
+        stroke_width = QLineEdit(str(layer.stroke_width))
+        stroke_width.setValidator(QIntValidator(0, 100, dialog))
 
         def set_color(button: QPushButton, title: str) -> None:
             color = QColorDialog.getColor(button.property("color"), dialog, title)
@@ -613,12 +617,22 @@ class MainWindow(QMainWindow):
                 button.setProperty("color", color)
                 button.setStyleSheet(f"background: {color.name()};")
 
-        for button, color, title in ((text_color, layer.color, "文字颜色"), (stroke_color, layer.stroke_color, "边框颜色")):
+        for button, color, toggle, title, fallback in ((text_color, layer.color, text_none, "文字颜色", (255, 255, 255)), (stroke_color, layer.stroke_color, stroke_none, "边框颜色", (0, 0, 0))):
+            color = color or fallback
             button.setProperty("color", QColor(*color))
             button.setStyleSheet(f"background: rgb({color[0]}, {color[1]}, {color[2]});")
             button.clicked.connect(lambda _, target=button, label=title: set_color(target, self.t(label)))
-        form.addRow(self.t("文字颜色"), text_color)
-        form.addRow(self.t("边框颜色"), stroke_color)
+            toggle.setChecked(color == fallback and ((button is text_color and layer.color is None) or (button is stroke_color and layer.stroke_color is None)))
+            toggle.toggled.connect(lambda checked, target=button: target.setEnabled(not checked))
+            button.setEnabled(not toggle.isChecked())
+        for label, button, toggle in ((self.t("文字颜色"), text_color, text_none), (self.t("边框颜色"), stroke_color, stroke_none)):
+            row = QWidget()
+            layout = QHBoxLayout(row)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(button)
+            layout.addWidget(toggle)
+            form.addRow(label, row)
+        form.addRow(self.t("边框宽度"), stroke_width)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
@@ -627,8 +641,9 @@ class MainWindow(QMainWindow):
             return False
         layer.text = text.text().strip()
         layer.font_path = font.currentData() or None
-        layer.color = tuple(text_color.property("color").getRgb()[:3])
-        layer.stroke_color = tuple(stroke_color.property("color").getRgb()[:3])
+        layer.color = None if text_none.isChecked() else tuple(text_color.property("color").getRgb()[:3])
+        layer.stroke_color = None if stroke_none.isChecked() else tuple(stroke_color.property("color").getRgb()[:3])
+        layer.stroke_width = int(stroke_width.text() or 0)
         return True
 
     def current_layer(self) -> WatermarkLayer | None:

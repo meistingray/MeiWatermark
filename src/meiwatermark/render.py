@@ -108,11 +108,14 @@ def _font_name(path: Path) -> str:
 def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
     font = _font(layer, target_size)
     probe = Image.new("RGBA", (1, 1))
-    box = ImageDraw.Draw(probe).textbbox((0, 0), layer.text, font=font, stroke_width=1)
+    stroke_width = layer.stroke_width if layer.stroke_color else 0
+    box = ImageDraw.Draw(probe).textbbox((0, 0), layer.text, font=font, stroke_width=stroke_width)
     width, height = max(1, box[2] - box[0]), max(1, box[3] - box[1])
-    stamp = Image.new("RGBA", (width + 4, height + 4))
+    padding = stroke_width + 2
+    stamp = Image.new("RGBA", (width + padding * 2, height + padding * 2))
     draw = ImageDraw.Draw(stamp)
-    draw.text((2 - box[0], 2 - box[1]), layer.text, font=font, fill=(*layer.color, 255), stroke_width=1, stroke_fill=(*layer.stroke_color, 255))
+    if layer.color or layer.stroke_color:
+        draw.text((padding - box[0], padding - box[1]), layer.text, font=font, fill=(*layer.color, 255) if layer.color else None, stroke_width=stroke_width, stroke_fill=(*layer.stroke_color, 255) if layer.stroke_color else None)
     return stamp
 
 

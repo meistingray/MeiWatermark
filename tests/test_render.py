@@ -60,6 +60,12 @@ class RenderTests(unittest.TestCase):
         self.assertIsNotNone(bounds)
         self.assertLess(bounds[3], stamp.height)
 
+    def test_text_stamp_supports_text_or_outline_only(self) -> None:
+        outline_only = _text_stamp(WatermarkLayer(LayerKind.TEXT, "text", text="A", color=None, stroke_color=(255, 0, 0), stroke_width=3), 80)
+        invisible = _text_stamp(WatermarkLayer(LayerKind.TEXT, "text", text="A", color=None, stroke_color=None), 80)
+        self.assertIsNotNone(outline_only.getchannel("A").getbbox())
+        self.assertIsNone(invisible.getchannel("A").getbbox())
+
     def test_negative_inset_moves_watermark_outside_the_canvas(self) -> None:
         base = Image.new("RGBA", (20, 20), "black")
         with TemporaryDirectory() as directory:

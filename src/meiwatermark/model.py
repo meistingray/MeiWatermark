@@ -54,8 +54,9 @@ class WatermarkLayer:
     image_path: str | None = None
     text: str = "© 2025"
     font_path: str | None = None
-    color: tuple[int, int, int] = (255, 255, 255)
-    stroke_color: tuple[int, int, int] = (0, 0, 0)
+    color: tuple[int, int, int] | None = (255, 255, 255)
+    stroke_color: tuple[int, int, int] | None = (0, 0, 0)
+    stroke_width: int = 1
 
 
 @dataclass(slots=True)
