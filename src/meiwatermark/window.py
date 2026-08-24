@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 )
 
 from .export import ExportWorker
+from .i18n import translate
 from .model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
 from .presets import (
     load_export_presets,
@@ -115,6 +116,7 @@ class MainWindow(QMainWindow):
         self.resize(1280, 800)
         self.setMinimumSize(960, 620)
         self.setAcceptDrops(True)
+        self.language = "zh"
         self.paths: list[Path] = []
         self.layers: list[WatermarkLayer] = []
         self.source = None
@@ -140,13 +142,52 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._body(), 1)
         self.setCentralWidget(root)
         self.status = self.statusBar()
-        self.status.showMessage("拖拽图片到窗口任意位置即可导入")
+        self.status.showMessage(self.t("拖拽图片到窗口任意位置即可导入"))
+
+    def t(self, text: str) -> str:
+        return translate(text, self.language)
+
+    def set_language(self, language: str) -> None:
+        if language == self.language:
+            return
+        selected_path = self.thumbnails.currentItem().data(Qt.ItemDataRole.UserRole) if self.thumbnails.currentItem() else None
+        selected_layer = self.layer_list.currentItem().data(Qt.ItemDataRole.UserRole) if self.layer_list.currentItem() else None
+        self.language = language
+        old = self.takeCentralWidget()
+        self.menuBar().clear()
+        self._build_ui()
+        self._apply_style()
+        self.refresh_presets()
+        paths, self.paths = self.paths, []
+        self.add_paths(paths)
+        layers, self.layers = self.layers, []
+        for layer in layers:
+            self.add_layer(layer)
+        self.format.setCurrentText(self.settings.format)
+        self.quality.setValue(self.settings.quality)
+        self.resize_mode.setCurrentIndex(list(ResizeMode).index(self.settings.resize_mode))
+        self.resize_value.setText(str(round(self.settings.resize_value)) if self.settings.resize_value else "")
+        self.allow_upscale.setChecked(self.settings.allow_upscale)
+        self.keep_exif.setChecked(self.settings.keep_exif)
+        self.keep_icc.setChecked(self.settings.keep_icc)
+        self.output_path.setText(self.settings.output_path)
+        for row in range(self.thumbnails.count()):
+            if self.thumbnails.item(row).data(Qt.ItemDataRole.UserRole) == selected_path:
+                self.thumbnails.setCurrentRow(row)
+        for row in range(self.layer_list.count()):
+            if self.layer_list.item(row).data(Qt.ItemDataRole.UserRole) == selected_layer:
+                self.layer_list.setCurrentRow(row)
+        if old is not None:
+            old.deleteLater()
 
     def _build_menu(self) -> None:
-        language = self.menuBar().addMenu("Language")
-        language.addAction("English")
-        language.addAction("中文")
-        about = QAction("关于", self)
+        language = self.menuBar().addMenu(self.t("Language"))
+        for code, label in (("zh", "中文"), ("en", "English"), ("es", "Español"), ("ja", "日本語")):
+            action = language.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(code == self.language)
+            action.triggered.connect(lambda _, value=code: self.set_language(value))
+        about = QAction(self.t("关于"), self)
         about.triggered.connect(self.show_about)
         self.menuBar().addAction(about)
 
@@ -154,22 +195,22 @@ class MainWindow(QMainWindow):
         self._build_menu()
         row = QHBoxLayout()
         row.setSpacing(5)
-        open_button = QPushButton("打开图片")
+        open_button = QPushButton(self.t("打开图片"))
         open_button.setObjectName("primary")
         open_button.clicked.connect(self.open_images)
         row.addWidget(open_button)
-        image_button = QPushButton("添加图片水印")
+        image_button = QPushButton(self.t("添加图片水印"))
         image_button.clicked.connect(self.add_image_layer)
         row.addWidget(image_button)
-        text_button = QPushButton("添加文字水印")
+        text_button = QPushButton(self.t("添加文字水印"))
         text_button.clicked.connect(self.add_text_layer)
         row.addWidget(text_button)
         row.addStretch()
         self.watermark_preset = QComboBox()
-        self.watermark_preset.addItem("水印预设")
+        self.watermark_preset.addItem(self.t("水印预设"))
         self.watermark_preset.currentTextChanged.connect(self.apply_watermark_preset)
         row.addWidget(self.watermark_preset)
-        save = QPushButton("保存水印预设")
+        save = QPushButton(self.t("保存水印预设"))
         save.clicked.connect(self.save_watermark_preset)
         row.addWidget(save)
         separator = QFrame()
@@ -177,10 +218,10 @@ class MainWindow(QMainWindow):
         separator.setFixedHeight(24)
         row.addWidget(separator)
         self.export_preset = QComboBox()
-        self.export_preset.addItem("导出预设")
+        self.export_preset.addItem(self.t("导出预设"))
         self.export_preset.currentTextChanged.connect(self.apply_export_preset)
         row.addWidget(self.export_preset)
-        save = QPushButton("保存导出预设")
+        save = QPushButton(self.t("保存导出预设"))
         save.clicked.connect(self.save_export_preset)
         row.addWidget(save)
         return row
@@ -199,7 +240,7 @@ class MainWindow(QMainWindow):
         panel.setMaximumWidth(270)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(5, 5, 5, 5)
-        layout.addWidget(self._heading("水印图层"))
+        layout.addWidget(self._heading(self.t("水印图层")))
         self.layer_list = QListWidget()
         self.layer_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.layer_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
@@ -209,26 +250,26 @@ class MainWindow(QMainWindow):
         self.layer_list.model().rowsMoved.connect(lambda *_: self.sync_layer_order())
         layout.addWidget(self.layer_list, 1)
         layout.addWidget(self._line())
-        layout.addWidget(self._heading("选中图层属性"))
+        layout.addWidget(self._heading(self.t("选中图层属性")))
         controls = QFrame()
         controls.setObjectName("propertyPanel")
         properties = QVBoxLayout(controls)
         properties.setContentsMargins(7, 7, 7, 7)
         properties.setSpacing(5)
-        self.size_value, self.size_unit = self._number_unit(24, ["百分比", "px"])
-        properties.addWidget(self._property_row("大小", self._stepper(self.size_value, 0, 100000), self.size_unit))
+        self.size_value, self.size_unit = self._number_unit(24, [self.t("百分比"), "px"])
+        properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 0, 100000), self.size_unit))
         self.opacity = QLineEdit("80")
         self.opacity.setValidator(QIntValidator(0, 100, self))
-        properties.addWidget(self._property_row("透明度", self._stepper(self.opacity, 0, 100)))
-        self.horizontal_value, self.horizontal_unit = self._number_unit(4, ["视觉比例", "百分比", "px"], -100000)
-        properties.addWidget(self._property_row("水平内嵌", self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit))
-        self.vertical_value, self.vertical_unit = self._number_unit(4, ["视觉比例", "百分比", "px"], -100000)
-        properties.addWidget(self._property_row("垂直内嵌", self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit))
+        properties.addWidget(self._property_row(self.t("透明度"), self._stepper(self.opacity, 0, 100)))
+        self.horizontal_value, self.horizontal_unit = self._number_unit(4, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
+        properties.addWidget(self._property_row(self.t("水平内嵌"), self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit))
+        self.vertical_value, self.vertical_unit = self._number_unit(4, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
+        properties.addWidget(self._property_row(self.t("垂直内嵌"), self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit))
         self.rotation = QLineEdit("0")
         self.rotation.setValidator(QIntValidator(-180, 180, self))
-        properties.addWidget(self._property_row("旋转", self._stepper(self.rotation, -180, 180)))
+        properties.addWidget(self._property_row(self.t("旋转"), self._stepper(self.rotation, -180, 180)))
         layout.addWidget(controls)
-        layout.addWidget(self._heading("九宫格定位"))
+        layout.addWidget(self._heading(self.t("九宫格定位")))
         grid_widget = QWidget()
         grid_widget.setObjectName("anchorGrid")
         grid = QGridLayout(grid_widget)
@@ -257,13 +298,13 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(5, 5, 5, 5)
         heading = QHBoxLayout()
-        heading.addWidget(self._heading("实时预览"))
+        heading.addWidget(self._heading(self.t("实时预览")))
         heading.addStretch()
-        remove = QPushButton("移除照片")
+        remove = QPushButton(self.t("移除照片"))
         remove.clicked.connect(self.remove_selected_photo)
         heading.addWidget(remove)
         layout.addLayout(heading)
-        self.preview = QLabel("拖拽图片到窗口任意位置即可导入")
+        self.preview = QLabel(self.t("拖拽图片到窗口任意位置即可导入"))
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setObjectName("preview")
         self.preview.setMinimumSize(420, 360)
@@ -292,11 +333,11 @@ class MainWindow(QMainWindow):
         panel.setMaximumWidth(290)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8, 5, 5, 5)
-        layout.addWidget(self._heading("导出设置"))
+        layout.addWidget(self._heading(self.t("导出设置")))
         form = QFormLayout()
         self.format = QComboBox()
         self.format.addItems(["JPEG", "PNG", "WEBP"])
-        form.addRow("格式", self.format)
+        form.addRow(self.t("格式"), self.format)
         self.quality = QSlider(Qt.Orientation.Horizontal)
         self.quality.setRange(1, 100)
         self.quality.setValue(100)
@@ -304,44 +345,44 @@ class MainWindow(QMainWindow):
         quality_row = QHBoxLayout()
         quality_row.addWidget(self.quality)
         quality_row.addWidget(self.quality_number)
-        form.addRow("质量", quality_row)
+        form.addRow(self.t("质量"), quality_row)
         self.resize_mode = QComboBox()
-        self.resize_mode.addItems(["不约束", "最长边", "最短边", "比例"])
-        form.addRow("尺寸约束", self.resize_mode)
+        self.resize_mode.addItems([self.t(value) for value in ("不约束", "最长边", "最短边", "比例")])
+        form.addRow(self.t("尺寸约束"), self.resize_mode)
         self.resize_value = QLineEdit()
         self.resize_value.setValidator(QIntValidator(1, 100000, self))
         self.resize_value.setEnabled(False)
         self.resize_value_label = QLabel("约束数值 (px)")
         form.addRow(self.resize_value_label, self.resize_value)
-        self.allow_upscale = QCheckBox("不放大")
+        self.allow_upscale = QCheckBox(self.t("不放大"))
         form.addRow(self.allow_upscale)
-        self.keep_exif = QCheckBox("保留 EXIF")
+        self.keep_exif = QCheckBox(self.t("保留 EXIF"))
         self.keep_exif.setChecked(True)
         form.addRow(self.keep_exif)
-        self.keep_icc = QCheckBox("保留 ICC")
+        self.keep_icc = QCheckBox(self.t("保留 ICC"))
         self.keep_icc.setChecked(True)
         form.addRow(self.keep_icc)
         layout.addLayout(form)
         layout.addStretch()
         self.output_path = QLineEdit()
         self.output_path.setPlaceholderText("支持相对路径 /Mei")
-        choose_output = QPushButton("选择")
+        choose_output = QPushButton(self.t("选择"))
         choose_output.clicked.connect(self.select_output_path)
-        clear_output = QPushButton("清空")
+        clear_output = QPushButton(self.t("清空"))
         clear_output.clicked.connect(self.output_path.clear)
         output_row = QHBoxLayout()
-        output_row.addWidget(QLabel("导出路径"))
+        output_row.addWidget(QLabel(self.t("导出路径")))
         output_row.addWidget(self.output_path, 1)
         output_row.addWidget(choose_output)
         output_row.addWidget(clear_output)
         layout.addLayout(output_row)
         layout.addWidget(self._line())
-        layout.addWidget(self._heading("预计文件大小"))
-        self.current_estimate = QLabel("当前照片约 —")
-        self.batch_estimate = QLabel("本批次约 —")
+        layout.addWidget(self._heading(self.t("预计文件大小")))
+        self.current_estimate = QLabel(self.t("当前照片约 —"))
+        self.batch_estimate = QLabel(self.t("本批次约 —"))
         layout.addWidget(self.current_estimate)
         layout.addWidget(self.batch_estimate)
-        self.export_button = QPushButton("导出")
+        self.export_button = QPushButton(self.t("导出"))
         self.export_button.setObjectName("primary")
         self.export_button.clicked.connect(self.export_batch)
         layout.addWidget(self.export_button)
@@ -609,12 +650,12 @@ class MainWindow(QMainWindow):
             return
         self._loading_controls = True
         self.size_value.setText(str(round(layer.size)))
-        self.size_unit.setCurrentText("px" if layer.size_unit is Unit.PIXELS else "百分比")
+        self.size_unit.setCurrentIndex(1 if layer.size_unit is Unit.PIXELS else 0)
         self.opacity.setText(str(layer.opacity))
         self.horizontal_value.setText(str(round(layer.horizontal_inset)))
-        self.horizontal_unit.setCurrentText({Unit.VISUAL: "视觉比例", Unit.PERCENT: "百分比", Unit.PIXELS: "px"}[layer.horizontal_unit])
+        self.horizontal_unit.setCurrentIndex({Unit.VISUAL: 0, Unit.PERCENT: 1, Unit.PIXELS: 2}[layer.horizontal_unit])
         self.vertical_value.setText(str(round(layer.vertical_inset)))
-        self.vertical_unit.setCurrentText({Unit.VISUAL: "视觉比例", Unit.PERCENT: "百分比", Unit.PIXELS: "px"}[layer.vertical_unit])
+        self.vertical_unit.setCurrentIndex({Unit.VISUAL: 0, Unit.PERCENT: 1, Unit.PIXELS: 2}[layer.vertical_unit])
         self.rotation.setText(str(round(layer.rotation)))
         self._show_anchor(layer.anchor)
         self._loading_controls = False
@@ -626,12 +667,12 @@ class MainWindow(QMainWindow):
         if layer is None:
             return
         layer.size = self._number(self.size_value)
-        layer.size_unit = Unit.PIXELS if self.size_unit.currentText() == "px" else Unit.PERCENT
+        layer.size_unit = Unit.PIXELS if self.size_unit.currentIndex() == 1 else Unit.PERCENT
         layer.opacity = self._number(self.opacity)
         layer.horizontal_inset = self._number(self.horizontal_value)
-        layer.horizontal_unit = {"视觉比例": Unit.VISUAL, "百分比": Unit.PERCENT, "px": Unit.PIXELS}[self.horizontal_unit.currentText()]
+        layer.horizontal_unit = (Unit.VISUAL, Unit.PERCENT, Unit.PIXELS)[self.horizontal_unit.currentIndex()]
         layer.vertical_inset = self._number(self.vertical_value)
-        layer.vertical_unit = {"视觉比例": Unit.VISUAL, "百分比": Unit.PERCENT, "px": Unit.PIXELS}[self.vertical_unit.currentText()]
+        layer.vertical_unit = (Unit.VISUAL, Unit.PERCENT, Unit.PIXELS)[self.vertical_unit.currentIndex()]
         layer.rotation = self._number(self.rotation)
         self.schedule_preview()
         self.schedule_estimate()
@@ -770,8 +811,8 @@ class MainWindow(QMainWindow):
     def refresh_presets(self) -> None:
         self.watermark_preset.blockSignals(True)
         self.export_preset.blockSignals(True)
-        self.watermark_preset.clear(); self.watermark_preset.addItem("水印预设"); self.watermark_preset.addItems(load_watermark_presets())
-        self.export_preset.clear(); self.export_preset.addItem("导出预设"); self.export_preset.addItems(load_export_presets())
+        self.watermark_preset.clear(); self.watermark_preset.addItem(self.t("水印预设")); self.watermark_preset.addItems(load_watermark_presets())
+        self.export_preset.clear(); self.export_preset.addItem(self.t("导出预设")); self.export_preset.addItems(load_export_presets())
         self.watermark_preset.blockSignals(False)
         self.export_preset.blockSignals(False)
 
@@ -820,4 +861,8 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "导出完成", message)
 
     def show_about(self) -> None:
-        QMessageBox.about(self, "关于 MeiWatermark", "MeiWatermark\n本地批量图片水印工具\nGPL-3.0-or-later")
+        QMessageBox.about(
+            self,
+            f"{self.t('关于')} MeiWatermark",
+            "MeiWatermark\nVersion 0.1.0\nGPL-3.0-or-later\n©2026 MeiStingray, Kicity Studio\nwww.kicity.com",
+        )
