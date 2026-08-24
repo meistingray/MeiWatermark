@@ -21,8 +21,7 @@ def preset_directory() -> Path:
     return directory
 
 
-def _read(name: str) -> dict[str, object]:
-    path = _directory() / name
+def _read(path: Path) -> dict[str, object]:
     try:
         if not path.exists():
             return {}
@@ -31,26 +30,30 @@ def _read(name: str) -> dict[str, object]:
         return {}
 
 
-def _write(name: str, values: dict[str, object]) -> None:
-    directory = preset_directory()
-    (directory / name).write_text(json.dumps(values, ensure_ascii=False, indent=2), encoding="utf-8")
+def _path(name: str) -> Path:
+    if not name or any(character in '<>:"/\\|?*' for character in name):
+        raise ValueError("invalid preset name")
+    return preset_directory() / f"{name}.json"
 
 
 def load_presets() -> dict[str, tuple[list[WatermarkLayer], ExportSettings]]:
     result: dict[str, tuple[list[WatermarkLayer], ExportSettings]] = {}
-    for name, values in _read("presets.json").items():
+    for path in preset_directory().glob("*.json"):
+        values = _read(path)
         if not isinstance(values, dict) or not isinstance(values.get("layers"), list) or not isinstance(values.get("export"), dict):
             continue
         try:
             layers = [WatermarkLayer(**{**item, "kind": LayerKind(item["kind"]), "size_unit": Unit(item["size_unit"]), "horizontal_unit": Unit(item["horizontal_unit"]), "vertical_unit": Unit(item["vertical_unit"]), "anchor": Anchor(item["anchor"])}) for item in values["layers"]]
             settings = ExportSettings(**{**values["export"], "resize_mode": ResizeMode(values["export"]["resize_mode"])})
-            result[name] = layers, settings
+            result[path.stem] = layers, settings
         except (KeyError, TypeError, ValueError):
             continue
     return result
 
 
 def save_preset(name: str, layers: list[WatermarkLayer], settings: ExportSettings) -> None:
-    presets = _read("presets.json")
-    presets[name] = {"layers": [asdict(layer) for layer in layers], "export": asdict(settings)}
-    _write("presets.json", presets)
+    _path(name).write_text(json.dumps({"layers": [asdict(layer) for layer in layers], "export": asdict(settings)}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def preset_exists(name: str) -> bool:
+    return _path(name).is_file()

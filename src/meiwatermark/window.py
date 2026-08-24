@@ -40,6 +40,7 @@ from .i18n import translate
 from .model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
 from .presets import (
     load_presets,
+    preset_exists,
     preset_directory,
     save_preset,
 )
@@ -790,13 +791,28 @@ class MainWindow(QMainWindow):
     def save_preset(self) -> None:
         name, accepted = QInputDialog.getText(self, self.t("保存预设"), f"{self.t('预设名称')}:")
         if accepted and name.strip():
+            name = name.strip()
             try:
-                save_preset(name.strip(), self.layers, self.settings)
-            except OSError as exc:
+                exists = preset_exists(name)
+            except ValueError:
+                QMessageBox.warning(self, self.t("无法保存预设"), self.t("预设名称无效"))
+                return
+            if exists:
+                dialog = QMessageBox(self)
+                dialog.setWindowTitle(self.t("覆盖预设"))
+                dialog.setText(self.t("已存在同名预设，是否覆盖？"))
+                overwrite = dialog.addButton(self.t("覆盖"), QMessageBox.ButtonRole.AcceptRole)
+                dialog.addButton(self.t("取消"), QMessageBox.ButtonRole.RejectRole)
+                dialog.exec()
+                if dialog.clickedButton() is not overwrite:
+                    return
+            try:
+                save_preset(name, self.layers, self.settings)
+            except (OSError, ValueError) as exc:
                 QMessageBox.warning(self, self.t("无法保存预设"), str(exc))
                 return
             self.refresh_presets()
-            self.preset.setCurrentText(name.strip())
+            self.preset.setCurrentText(name)
 
     def open_preset_directory(self) -> None:
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(preset_directory())))

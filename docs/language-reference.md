@@ -11,6 +11,10 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 保存 | Save | Guardar | 保存 |
 | 管理 | Manage | Gestionar | 管理 |
 | 保存预设 | Save Preset | Guardar preajuste | プリセットを保存 |
+| 覆盖预设 | Overwrite Preset | Sobrescribir | プリセットを上書き |
+| 已存在同名预设，是否覆盖？ | A preset with this name already exists. Overwrite it? | Ya existe un preajuste con este nombre. ¿Sobrescribir? | 同名のプリセットがあります。上書きしますか？ |
+| 覆盖 / 取消 | Overwrite / Cancel | Sobrescribir / Cancelar | 上書き / キャンセル |
+| 预设名称无效 | Invalid preset name | Nombre no válido | 無効なプリセット名 |
 | 水印图层 | Watermark Layers | Capas de marca de agua | 透かしレイヤー |
 | 图片水印 | Image Watermark | Imagen | 画像透かし |
 | 选中图层属性 | Selected Layer | Capa seleccionada | 選択中のレイヤー |
