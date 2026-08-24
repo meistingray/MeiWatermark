@@ -336,7 +336,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(8, 5, 5, 5)
         layout.addWidget(self._heading(self.t("导出设置")))
         form = QFormLayout()
-        form.setVerticalSpacing(8)
+        form.setVerticalSpacing(12)
         self.format = QComboBox()
         self.format.addItems(["JPEG", "PNG", "WEBP"])
         form.addRow(self.t("格式"), self.format)
@@ -457,6 +457,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _slider_widget(slider: QSlider, number: QLabel) -> QWidget:
         widget = QWidget()
+        widget.setObjectName("sliderEditor")
         row = QHBoxLayout(widget)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(5)
@@ -495,7 +496,7 @@ class MainWindow(QMainWindow):
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
             QPushButton#presetSave {{ color: {ACCENT}; border-color: {ACCENT}; font-weight: 600; }}
             QLabel#heading {{ font-size: 10pt; font-weight: 600; margin: 2px 0; }}
-            QLabel#preview {{ font-size: 10pt; background: #262a30; border: 1px solid #363b43; color: #c8ccd2; }}
+            QLabel#preview {{ font-size: 15pt; background: #262a30; border: 1px solid #363b43; color: #c8ccd2; }}
             QWidget#sidePanel {{ background: #ffffff; }}
             QWidget#sidePanel QLabel, QWidget#sidePanel QCheckBox {{ background: transparent; }}
             QListWidget {{ background: #fff; border: 1px solid #d9dde3; border-radius: 0; padding: 2px; }}
@@ -511,7 +512,7 @@ class MainWindow(QMainWindow):
             QToolButton#anchor {{ border: none; background: transparent; border-radius: 17px; font-size: 16pt; color: #7b818a; }}
             QToolButton#anchor:checked {{ border: none; background: #f9e3ef; color: {ACCENT}; }}
             QFrame#propertyPanel {{ background: #ffffff; border: 1px solid #dfe2e7; border-radius: 3px; }}
-            QFrame#propertyPanel QLabel, QWidget#propertyRow, QWidget#stepper, QWidget#anchorGrid {{ background: transparent; }}
+            QFrame#propertyPanel QLabel, QWidget#propertyRow, QWidget#stepper, QWidget#sliderEditor, QWidget#anchorGrid {{ background: transparent; }}
             QSlider, QSlider::groove:horizontal, QSlider::add-page:horizontal {{ border: none; background: rgba(0, 0, 0, 0); }}
             QSlider::groove:horizontal, QSlider::add-page:horizontal, QSlider::sub-page:horizontal {{ height: 3px; }}
             QSlider::sub-page:horizontal {{ border: none; background: {ACCENT}; }}
