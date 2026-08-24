@@ -496,7 +496,7 @@ class MainWindow(QMainWindow):
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
             QPushButton#presetSave {{ color: {ACCENT}; border-color: {ACCENT}; font-weight: 600; }}
             QLabel#heading {{ font-size: 10pt; font-weight: 600; margin: 2px 0; }}
-            QLabel#preview {{ font-size: 15pt; background: #262a30; border: 1px solid #363b43; color: #c8ccd2; }}
+            QLabel#preview {{ font-size: 12pt; background: #262a30; border: 1px solid #363b43; color: #c8ccd2; }}
             QWidget#sidePanel {{ background: #ffffff; }}
             QWidget#sidePanel QLabel, QWidget#sidePanel QCheckBox {{ background: transparent; }}
             QListWidget {{ background: #fff; border: 1px solid #d9dde3; border-radius: 0; padding: 2px; }}
