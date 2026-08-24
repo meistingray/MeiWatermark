@@ -153,6 +153,7 @@ class MainWindow(QMainWindow):
             return
         selected_path = self.thumbnails.currentItem().data(Qt.ItemDataRole.UserRole) if self.thumbnails.currentItem() else None
         selected_layer = self.layer_list.currentItem().data(Qt.ItemDataRole.UserRole) if self.layer_list.currentItem() else None
+        settings = self.settings
         self.language = language
         old = self.takeCentralWidget()
         self.menuBar().clear()
@@ -164,14 +165,14 @@ class MainWindow(QMainWindow):
         layers, self.layers = self.layers, []
         for layer in layers:
             self.add_layer(layer)
-        self.format.setCurrentText(self.settings.format)
-        self.quality.setValue(self.settings.quality)
-        self.resize_mode.setCurrentIndex(list(ResizeMode).index(self.settings.resize_mode))
-        self.resize_value.setText(str(round(self.settings.resize_value)) if self.settings.resize_value else "")
-        self.allow_upscale.setChecked(self.settings.allow_upscale)
-        self.keep_exif.setChecked(self.settings.keep_exif)
-        self.keep_icc.setChecked(self.settings.keep_icc)
-        self.output_path.setText(self.settings.output_path)
+        self.format.setCurrentText(settings.format)
+        self.quality.setValue(settings.quality)
+        self.resize_mode.setCurrentIndex(list(ResizeMode).index(settings.resize_mode))
+        self.resize_value.setText(str(round(settings.resize_value)) if settings.resize_value else "")
+        self.allow_upscale.setChecked(settings.allow_upscale)
+        self.keep_exif.setChecked(settings.keep_exif)
+        self.keep_icc.setChecked(settings.keep_icc)
+        self.output_path.setText(settings.output_path)
         for row in range(self.thumbnails.count()):
             if self.thumbnails.item(row).data(Qt.ItemDataRole.UserRole) == selected_path:
                 self.thumbnails.setCurrentRow(row)
@@ -881,19 +882,20 @@ class MainWindow(QMainWindow):
         preset = load_presets().get(name)
         if preset is None:
             return
-        preset_layers, self.settings = preset
+        preset_layers, settings = preset
+        self.settings = settings
         self.layers = []
         self.layer_list.clear()
         for layer in preset_layers:
             self.add_layer(layer)
-        self.format.setCurrentText(self.settings.format)
-        self.quality.setValue(self.settings.quality)
-        self.resize_mode.setCurrentIndex(list(ResizeMode).index(self.settings.resize_mode))
-        self.resize_value.setText(str(round(self.settings.resize_value or (100 if self.settings.resize_mode is ResizeMode.SCALE else 2048))))
-        self.allow_upscale.setChecked(self.settings.allow_upscale)
-        self.keep_exif.setChecked(self.settings.keep_exif)
-        self.keep_icc.setChecked(self.settings.keep_icc)
-        self.output_path.setText(self.settings.output_path)
+        self.format.setCurrentText(settings.format)
+        self.quality.setValue(settings.quality)
+        self.resize_mode.setCurrentIndex(list(ResizeMode).index(settings.resize_mode))
+        self.resize_value.setText(str(round(settings.resize_value)) if settings.resize_value else "")
+        self.allow_upscale.setChecked(settings.allow_upscale)
+        self.keep_exif.setChecked(settings.keep_exif)
+        self.keep_icc.setChecked(settings.keep_icc)
+        self.output_path.setText(settings.output_path)
 
     def export_batch(self) -> None:
         if not self.paths:
