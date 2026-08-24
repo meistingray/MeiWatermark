@@ -31,6 +31,9 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QSlider,
     QSplitter,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -108,6 +111,13 @@ class LayerRow(QWidget):
             if (event.position() - self.drag_start).manhattanLength() >= 4:
                 self.owner.startDrag(Qt.DropAction.MoveAction)
         event.accept()
+
+
+class ThumbnailDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index) -> None:  # type: ignore[no-untyped-def]
+        clean_option = QStyleOptionViewItem(option)
+        clean_option.state &= ~QStyle.StateFlag.State_HasFocus
+        super().paint(painter, clean_option, index)
 
 
 class MainWindow(QMainWindow):
@@ -312,6 +322,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.preview, 1)
         layout.addWidget(self._line())
         self.thumbnails = QListWidget()
+        self.thumbnails.setItemDelegate(ThumbnailDelegate(self.thumbnails))
         self.thumbnails.setViewMode(QListWidget.ViewMode.IconMode)
         self.thumbnails.setFlow(QListWidget.Flow.LeftToRight)
         self.thumbnails.setWrapping(False)

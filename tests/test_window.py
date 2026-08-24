@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QApplication
 
 from meiwatermark.model import ExportSettings, LayerKind, ResizeMode, WatermarkLayer
 from meiwatermark.presets import save_preset
-from meiwatermark.window import MainWindow, display_image_name
+from meiwatermark.window import MainWindow, ThumbnailDelegate, display_image_name
 
 
 class WindowTests(unittest.TestCase):
@@ -21,6 +21,11 @@ class WindowTests(unittest.TestCase):
 
     def test_long_image_name_is_truncated_to_twelve_characters(self) -> None:
         self.assertEqual(display_image_name(Path("very-long-photo-name.jpg")), "very-long-p…")
+
+    def test_thumbnail_selection_has_no_native_focus_outline(self) -> None:
+        window = MainWindow()
+        self.assertIsInstance(window.thumbnails.itemDelegate(), ThumbnailDelegate)
+        window.close()
 
     def test_applying_preset_restores_all_export_controls(self) -> None:
         settings = ExportSettings(resize_mode=ResizeMode.SCALE, resize_value=63, allow_upscale=True, keep_exif=False, keep_icc=False, output_path="/Mei")
