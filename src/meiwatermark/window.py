@@ -69,7 +69,7 @@ def pen_icon() -> QIcon:
 
 
 class LayerRow(QWidget):
-    def __init__(self, owner: QListWidget, item: QListWidgetItem, layer: WatermarkLayer, edit) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, owner: QListWidget, item: QListWidgetItem, layer: WatermarkLayer, edit, edit_tooltip: str) -> None:  # type: ignore[no-untyped-def]
         super().__init__()
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.owner, self.item, self.drag_start = owner, item, None
@@ -89,7 +89,8 @@ class LayerRow(QWidget):
             button.setFixedSize(28, 28)
             button.setAutoRaise(True)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            button.setToolTip("编辑文字水印")
+            button.setToolTip(edit_tooltip)
+            button.setStyleSheet("padding: 0 0 4px 0;")
             button.clicked.connect(edit)
             layout.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
         drag = QLabel("⠿")
@@ -181,13 +182,13 @@ class MainWindow(QMainWindow):
             old.deleteLater()
 
     def _build_menu(self) -> None:
-        language = self.menuBar().addMenu(self.t("Language"))
+        language = self.menuBar().addMenu("Language")
         for code, label in (("zh", "中文"), ("en", "English"), ("es", "Español"), ("ja", "日本語")):
             action = language.addAction(label)
             action.setCheckable(True)
             action.setChecked(code == self.language)
             action.triggered.connect(lambda _, value=code: self.set_language(value))
-        about = QAction(self.t("关于"), self)
+        about = QAction("About", self)
         about.triggered.connect(self.show_about)
         self.menuBar().addAction(about)
 
@@ -573,7 +574,7 @@ class MainWindow(QMainWindow):
         item.setCheckState(Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked)
         item.setSizeHint(QSize(0, 28))
         self.layer_list.addItem(item)
-        self.layer_list.setItemWidget(item, LayerRow(self.layer_list, item, layer, lambda: self.edit_text_layer(item)))
+        self.layer_list.setItemWidget(item, LayerRow(self.layer_list, item, layer, lambda: self.edit_text_layer(item), self.t("编辑文字水印")))
         self.layer_list.setCurrentItem(item)
         self.schedule_preview()
         self.schedule_estimate()
@@ -592,16 +593,16 @@ class MainWindow(QMainWindow):
 
     def edit_text_dialog(self, layer: WatermarkLayer) -> bool:
         dialog = QDialog(self)
-        dialog.setWindowTitle("文字水印")
+        dialog.setWindowTitle(self.t("文字水印"))
         form = QFormLayout(dialog)
         text = QLineEdit(layer.text)
-        form.addRow("文字", text)
+        form.addRow(self.t("文字"), text)
         font = QComboBox()
-        font.addItem("系统默认", "")
+        font.addItem(self.t("系统默认"), "")
         for name, path in system_fonts().items():
             font.addItem(name, path)
         font.setCurrentIndex(max(0, font.findData(layer.font_path)))
-        form.addRow("字体", font)
+        form.addRow(self.t("字体"), font)
         text_color = QPushButton()
         stroke_color = QPushButton()
 
@@ -614,9 +615,9 @@ class MainWindow(QMainWindow):
         for button, color, title in ((text_color, layer.color, "文字颜色"), (stroke_color, layer.stroke_color, "边框颜色")):
             button.setProperty("color", QColor(*color))
             button.setStyleSheet(f"background: rgb({color[0]}, {color[1]}, {color[2]});")
-            button.clicked.connect(lambda _, target=button, label=title: set_color(target, label))
-        form.addRow("文字颜色", text_color)
-        form.addRow("边框颜色", stroke_color)
+            button.clicked.connect(lambda _, target=button, label=title: set_color(target, self.t(label)))
+        form.addRow(self.t("文字颜色"), text_color)
+        form.addRow(self.t("边框颜色"), stroke_color)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
