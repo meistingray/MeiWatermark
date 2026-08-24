@@ -30,11 +30,11 @@ class ExportWorker(QThread):
             try:
                 source = load_image(path)
                 output = resize_for_export(render(source.image, self.layers), self.settings)
-                destination = self.destination if self.destination.is_absolute() else path.parent / self.destination
+                destination = self.destination if self.destination.is_absolute() else path.parent / str(self.destination).lstrip("\\/")
                 target = destination / f"{path.stem}{self.settings.suffix}{extension}"
                 counter = 2
                 while target.exists():
-                    target = self.destination / f"{path.stem}{self.settings.suffix}_{counter}{extension}"
+                    target = destination / f"{path.stem}{self.settings.suffix}_{counter}{extension}"
                     counter += 1
                 save_image(output, target, self.settings, source)
                 complete += 1

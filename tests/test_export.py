@@ -15,7 +15,7 @@ class ExportTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             source = Path(directory) / "photo.png"
             Image.new("RGB", (20, 20), "white").save(source)
-            ExportWorker([source], Path("output"), [], ExportSettings(format="PNG")).run()
+            ExportWorker([source], Path("/output"), [], ExportSettings(format="PNG")).run()
             self.assertTrue((source.parent / "output" / "photo_watermarked.png").is_file())
 
 
