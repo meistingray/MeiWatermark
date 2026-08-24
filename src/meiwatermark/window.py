@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QPainter, QPen, QPixmap
+from PySide6.QtGui import QAction, QColor, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QKeySequence, QPainter, QPen, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSizePolicy,
@@ -47,6 +48,10 @@ from .render import estimate_size, export_size, load_image, load_preview, render
 
 ACCENT = "#A40B5E"
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp)"
+
+
+def display_image_name(path: Path) -> str:
+    return path.name[:11] + "…" if len(path.name) > 12 else path.name
 
 
 def pen_icon() -> QIcon:
@@ -272,7 +277,12 @@ class MainWindow(QMainWindow):
         self.thumbnails.setIconSize(QSize(94, 70))
         self.thumbnails.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.thumbnails.setFixedHeight(108)
+        self.thumbnails.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.thumbnails.customContextMenuRequested.connect(self.show_thumbnail_menu)
         self.thumbnails.currentRowChanged.connect(self.select_photo)
+        remove_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Delete), self.thumbnails)
+        remove_shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+        remove_shortcut.activated.connect(self.remove_selected_photo)
         layout.addWidget(self.thumbnails)
         return panel
 
@@ -456,7 +466,7 @@ class MainWindow(QMainWindow):
             return
         self.paths.extend(added)
         for path in added:
-            item = QListWidgetItem(path.name)
+            item = QListWidgetItem(display_image_name(path))
             item.setData(Qt.ItemDataRole.UserRole, path)
             try:
                 image = load_image(path).image
@@ -494,6 +504,15 @@ class MainWindow(QMainWindow):
             self.preview.setPixmap(QPixmap())
             self.current_estimate.setText("当前照片约 —")
             self.batch_estimate.setText("本批次约 —")
+
+    def show_thumbnail_menu(self, position) -> None:  # type: ignore[no-untyped-def]
+        item = self.thumbnails.itemAt(position)
+        if item is None:
+            return
+        self.thumbnails.setCurrentItem(item)
+        menu = QMenu(self)
+        menu.addAction("从列表移除", self.remove_selected_photo)
+        menu.exec(self.thumbnails.viewport().mapToGlobal(position))
 
     def add_image_layer(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "选择水印图片", "", IMAGE_FILTER)
