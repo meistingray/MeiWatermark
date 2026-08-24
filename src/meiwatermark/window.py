@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QPixmap
+from PySide6.QtGui import QAction, QColor, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -28,7 +28,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSlider,
-    QSpinBox,
     QSplitter,
     QToolButton,
     QVBoxLayout,
@@ -48,6 +47,54 @@ from .render import estimate_size, export_size, load_image, load_preview, render
 
 ACCENT = "#A40B5E"
 IMAGE_FILTER = "Images (*.jpg *.jpeg *.png *.webp *.tif *.tiff *.bmp)"
+
+
+def pen_icon() -> QIcon:
+    pixmap = QPixmap(24, 24)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor(ACCENT), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    painter.drawLine(7, 17, 17, 7)
+    painter.setPen(QPen(QColor("#5b0635"), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+    painter.drawLine(5, 19, 8, 16)
+    painter.end()
+    return QIcon(pixmap)
+
+
+class LayerRow(QWidget):
+    def __init__(self, owner: QListWidget, item: QListWidgetItem, layer: WatermarkLayer, edit) -> None:  # type: ignore[no-untyped-def]
+        super().__init__()
+        self.owner, self.item, self.drag_start = owner, item, None
+        self.setStyleSheet("background: transparent;")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(22, 0, 4, 0)
+        name = QLabel(layer.name)
+        name.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(name)
+        layout.addStretch()
+        if layer.kind is LayerKind.TEXT:
+            button = QToolButton()
+            button.setIcon(pen_icon())
+            button.setIconSize(QSize(18, 18))
+            button.setFixedSize(30, 26)
+            button.setToolTip("编辑文字水印")
+            button.clicked.connect(edit)
+            layout.addWidget(button)
+        drag = QLabel("⠿")
+        drag.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(drag)
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        self.owner.setCurrentItem(self.item)
+        self.drag_start = event.position()
+        event.accept()
+
+    def mouseMoveEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        if self.drag_start and event.buttons() & Qt.MouseButton.LeftButton:
+            if (event.position() - self.drag_start).manhattanLength() >= 4:
+                self.owner.startDrag(Qt.DropAction.MoveAction)
+        event.accept()
 
 
 class MainWindow(QMainWindow):
@@ -157,16 +204,15 @@ class MainWindow(QMainWindow):
         form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
         self.size_value, self.size_unit = self._number_unit(24, ["百分比", "px"])
         form.addRow("大小", self._pair(self.size_value, self.size_unit))
-        self.opacity = QSpinBox()
-        self.opacity.setRange(0, 100)
-        self.opacity.setValue(80)
+        self.opacity = QLineEdit("80")
+        self.opacity.setValidator(QIntValidator(0, 100, self))
         form.addRow("透明度", self.opacity)
         self.horizontal_value, self.horizontal_unit = self._number_unit(4, ["视觉比例", "百分比", "px"])
         form.addRow("水平内嵌", self._pair(self.horizontal_value, self.horizontal_unit))
         self.vertical_value, self.vertical_unit = self._number_unit(4, ["视觉比例", "百分比", "px"])
         form.addRow("垂直内嵌", self._pair(self.vertical_value, self.vertical_unit))
-        self.rotation = QSpinBox()
-        self.rotation.setRange(-180, 180)
+        self.rotation = QLineEdit("0")
+        self.rotation.setValidator(QIntValidator(-180, 180, self))
         form.addRow("旋转", self.rotation)
         layout.addWidget(controls)
         layout.addWidget(self._heading("九宫格定位"))
@@ -186,7 +232,7 @@ class MainWindow(QMainWindow):
             if isinstance(widget, QComboBox):
                 widget.currentTextChanged.connect(lambda *_: self.store_layer_controls())
             else:
-                widget.valueChanged.connect(lambda *_: self.store_layer_controls())
+                widget.textChanged.connect(lambda *_: self.store_layer_controls())
         return panel
 
     def _preview_panel(self) -> QWidget:
@@ -239,7 +285,7 @@ class MainWindow(QMainWindow):
         self.resize_mode = QComboBox()
         self.resize_mode.addItems(["不约束", "最长边", "最短边", "比例"])
         form.addRow("尺寸约束", self.resize_mode)
-        self.resize_value = QLineEdit("2048")
+        self.resize_value = QLineEdit()
         self.resize_value.setValidator(QIntValidator(1, 100000, self))
         self.resize_value.setEnabled(False)
         self.resize_value_label = QLabel("约束数值 (px)")
@@ -301,10 +347,9 @@ class MainWindow(QMainWindow):
         return widget
 
     @staticmethod
-    def _number_unit(value: int, units: list[str]) -> tuple[QSpinBox, QComboBox]:
-        number = QSpinBox()
-        number.setRange(0, 100000)
-        number.setValue(value)
+    def _number_unit(value: int, units: list[str]) -> tuple[QLineEdit, QComboBox]:
+        number = QLineEdit(str(value))
+        number.setValidator(QIntValidator(0, 100000))
         unit = QComboBox()
         unit.addItems(units)
         return number, unit
@@ -316,7 +361,7 @@ class MainWindow(QMainWindow):
             QMenuBar {{ background: #ffffff; border-bottom: 1px solid #e3e5e8; padding: 1px 3px; }}
             QMenuBar::item {{ padding: 4px 8px; background: transparent; }}
             QMenuBar::item:selected {{ background: #eceef2; }}
-            QPushButton, QComboBox, QSpinBox, QLineEdit {{ min-height: 24px; border: 1px solid #d7dbe1; border-radius: 2px; padding: 1px 7px; background: #fff; }}
+            QPushButton, QComboBox, QLineEdit {{ min-height: 24px; border: 1px solid #d7dbe1; border-radius: 2px; padding: 1px 7px; background: #fff; }}
             QPushButton:hover, QComboBox:hover {{ border-color: {ACCENT}; }}
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
             QLabel#heading {{ font-size: 13px; font-weight: 600; margin: 2px 0; }}
@@ -367,7 +412,7 @@ class MainWindow(QMainWindow):
             return
         path = self.thumbnails.item(row).data(Qt.ItemDataRole.UserRole)
         try:
-            self.source = load_preview(path, (1600, 1600))
+            self.source = load_preview(path, (1200, 1200))
             self.schedule_preview()
             self.schedule_estimate()
         except Exception as exc:  # noqa: BLE001
@@ -406,28 +451,10 @@ class MainWindow(QMainWindow):
         item.setCheckState(Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked)
         item.setSizeHint(QSize(0, 28))
         self.layer_list.addItem(item)
-        self.layer_list.setItemWidget(item, self._layer_row(layer))
+        self.layer_list.setItemWidget(item, LayerRow(self.layer_list, item, layer, lambda: self.edit_text_layer(item)))
         self.layer_list.setCurrentItem(item)
         self.schedule_preview()
         self.schedule_estimate()
-
-    @staticmethod
-    def _layer_row(layer: WatermarkLayer) -> QWidget:
-        row = QWidget()
-        row.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        row.setStyleSheet("background: transparent;")
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(22, 0, 5, 0)
-        layout.addWidget(QLabel(layer.name))
-        layout.addStretch()
-        if layer.kind is LayerKind.TEXT:
-            edit = QLabel("🖉")
-            edit.setToolTip("双击图层编辑文字样式")
-            layout.addWidget(edit)
-        drag = QLabel("⠿")
-        drag.setToolTip("拖动图层排序")
-        layout.addWidget(drag)
-        return row
 
     def edit_text_layer(self, item: QListWidgetItem) -> None:
         layer_id = item.data(Qt.ItemDataRole.UserRole)
@@ -497,14 +524,14 @@ class MainWindow(QMainWindow):
         if layer is None:
             return
         self._loading_controls = True
-        self.size_value.setValue(round(layer.size))
+        self.size_value.setText(str(round(layer.size)))
         self.size_unit.setCurrentText("px" if layer.size_unit is Unit.PIXELS else "百分比")
-        self.opacity.setValue(layer.opacity)
-        self.horizontal_value.setValue(round(layer.horizontal_inset))
+        self.opacity.setText(str(layer.opacity))
+        self.horizontal_value.setText(str(round(layer.horizontal_inset)))
         self.horizontal_unit.setCurrentText({Unit.VISUAL: "视觉比例", Unit.PERCENT: "百分比", Unit.PIXELS: "px"}[layer.horizontal_unit])
-        self.vertical_value.setValue(round(layer.vertical_inset))
+        self.vertical_value.setText(str(round(layer.vertical_inset)))
         self.vertical_unit.setCurrentText({Unit.VISUAL: "视觉比例", Unit.PERCENT: "百分比", Unit.PIXELS: "px"}[layer.vertical_unit])
-        self.rotation.setValue(round(layer.rotation))
+        self.rotation.setText(str(round(layer.rotation)))
         for button in self.anchor_buttons:
             button.setChecked(button.property("anchor") is layer.anchor)
         self._loading_controls = False
@@ -515,16 +542,20 @@ class MainWindow(QMainWindow):
         layer = self.current_layer()
         if layer is None:
             return
-        layer.size = self.size_value.value()
+        layer.size = self._number(self.size_value)
         layer.size_unit = Unit.PIXELS if self.size_unit.currentText() == "px" else Unit.PERCENT
-        layer.opacity = self.opacity.value()
-        layer.horizontal_inset = self.horizontal_value.value()
+        layer.opacity = self._number(self.opacity)
+        layer.horizontal_inset = self._number(self.horizontal_value)
         layer.horizontal_unit = {"视觉比例": Unit.VISUAL, "百分比": Unit.PERCENT, "px": Unit.PIXELS}[self.horizontal_unit.currentText()]
-        layer.vertical_inset = self.vertical_value.value()
+        layer.vertical_inset = self._number(self.vertical_value)
         layer.vertical_unit = {"视觉比例": Unit.VISUAL, "百分比": Unit.PERCENT, "px": Unit.PIXELS}[self.vertical_unit.currentText()]
-        layer.rotation = self.rotation.value()
+        layer.rotation = self._number(self.rotation)
         self.schedule_preview()
         self.schedule_estimate()
+
+    @staticmethod
+    def _number(field: QLineEdit) -> int:
+        return int(field.text() or 0)
 
     def set_anchor(self, anchor: Anchor) -> None:
         layer = self.current_layer()
@@ -543,10 +574,10 @@ class MainWindow(QMainWindow):
         self.schedule_estimate()
 
     def schedule_preview(self) -> None:
-        self.preview_timer.start(120)
+        self.preview_timer.start(30)
 
     def schedule_estimate(self) -> None:
-        self.estimate_timer.start(350)
+        self.estimate_timer.start(1000)
 
     def resizeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         super().resizeEvent(event)
@@ -595,9 +626,10 @@ class MainWindow(QMainWindow):
         self.schedule_estimate()
 
     def resize_mode_changed(self) -> None:
-        ratio = self.resize_mode.currentIndex() == 3
+        index = self.resize_mode.currentIndex()
+        ratio = index == 3
         self.resize_value_label.setText("约束数值 (%)" if ratio else "约束数值 (px)")
-        self.resize_value.setText("100" if ratio else "2048")
+        self.resize_value.setText("" if index == 0 else "100" if ratio else "2048")
         self.update_export_settings()
 
     def select_output_path(self) -> None:

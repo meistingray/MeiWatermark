@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
+from struct import unpack
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -62,11 +63,47 @@ def system_fonts() -> dict[str, str]:
     directory = Path("C:/Windows/Fonts")
     for path in [*directory.glob("*.ttf"), *directory.glob("*.otf"), *directory.glob("*.ttc")]:
         try:
-            name = ImageFont.truetype(path, 12).getname()[0]
+            name = _font_name(path)
             fonts.setdefault(name, str(path))
         except OSError:
             continue
     return dict(sorted(fonts.items()))
+
+
+def _font_name(path: Path) -> str:
+    fallback = ImageFont.truetype(path, 12).getname()[0]
+    try:
+        with path.open("rb") as file:
+            if file.read(4) == b"ttcf":
+                file.read(4)
+                offset = unpack(">I", file.read(4))[0]
+                start = unpack(">I", file.read(4))[0] if offset else 0
+            else:
+                start = 0
+            file.seek(start + 4)
+            table_count = unpack(">H", file.read(2))[0]
+            file.seek(6, 1)
+            name_offset = name_length = 0
+            for _ in range(table_count):
+                tag, _, offset, length = unpack(">4sIII", file.read(16))
+                if tag == b"name":
+                    name_offset, name_length = offset, length
+            if not name_offset:
+                return fallback
+            file.seek(name_offset + 2)
+            count, strings_offset = unpack(">HH", file.read(4))
+            records = [unpack(">HHHHHH", file.read(12)) for _ in range(count)]
+            names: list[str] = []
+            for platform, encoding, _, name_id, length, offset in records:
+                if name_id != 1:
+                    continue
+                file.seek(name_offset + strings_offset + offset)
+                raw = file.read(length)
+                encoding_name = "utf-16-be" if platform == 3 else "mac_roman"
+                names.append(raw.decode(encoding_name, errors="ignore"))
+            return next((name for name in names if any(ord(char) > 127 for char in name)), names[0] if names else fallback)
+    except (OSError, UnicodeError, ValueError):
+        return fallback
 
 
 def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
