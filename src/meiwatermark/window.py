@@ -113,7 +113,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("MeiWatermark")
-        self.setWindowIcon(QIcon(str(Path(__file__).parent / "assets" / "logo.png")))
+        self.setWindowIcon(QIcon(str(Path(__file__).parent / "assets" / "app-icon.png")))
         self.resize(1280, 800)
         self.setMinimumSize(960, 620)
         self.setAcceptDrops(True)
