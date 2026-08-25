@@ -28,6 +28,11 @@ class WindowTests(unittest.TestCase):
         self.assertIsInstance(window.thumbnails.itemDelegate(), ThumbnailDelegate)
         window.close()
 
+    def test_combo_boxes_use_the_flat_arrow_asset(self) -> None:
+        window = MainWindow()
+        self.assertIn("down-arrow.svg", window.styleSheet())
+        window.close()
+
     def test_compact_unit_translations(self) -> None:
         self.assertEqual([translate("百分比", language) for language in ("zh", "en", "es", "ja")], ["%", "%", "%", "%"])
         self.assertEqual([translate("视觉比例", language) for language in ("zh", "en", "es", "ja")], ["比例", "Ratio", "Ratio", "比率"])
