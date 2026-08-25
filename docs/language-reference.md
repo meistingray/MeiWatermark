@@ -49,3 +49,4 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 无颜色 | None | Ninguno | なし |
 | 边框宽度 | Outline Width | Grosor del borde | 輪郭の太さ |
 | 系统默认 | Default | Predeterminado | システム既定 |
+| 正在读取字体… | Loading fonts… | Cargando fuentes… | フォントを読み込み中… |

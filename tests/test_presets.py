@@ -14,9 +14,10 @@ class PresetTests(unittest.TestCase):
     def test_combined_preset_stores_layers_and_export_settings(self) -> None:
         with TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}):
             export = ExportSettings(format="PNG", quality=92, resize_mode=ResizeMode.SCALE, resize_value=63, allow_upscale=True, keep_exif=False, keep_icc=False, output_path="/Mei")
-            save_preset("test", [WatermarkLayer(LayerKind.TEXT, "text", text="MeiStingray")], export)
+            save_preset("test", [WatermarkLayer(LayerKind.TEXT, "text", text="MeiStingray", font_path="C:/Fonts/font.ttc", font_index=3, font_variation=[700])], export)
             layers, settings = load_presets()["test"]
             self.assertEqual(layers[0].text, "MeiStingray")
+            self.assertEqual((layers[0].font_path, layers[0].font_index, layers[0].font_variation), ("C:/Fonts/font.ttc", 3, [700]))
             self.assertEqual((settings.format, settings.quality), ("PNG", 92))
             self.assertEqual((settings.resize_mode, settings.resize_value), (ResizeMode.SCALE, 63))
             self.assertEqual((settings.allow_upscale, settings.keep_exif, settings.keep_icc, settings.output_path), (True, False, False, "/Mei"))

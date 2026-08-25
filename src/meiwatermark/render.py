@@ -3,8 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from io import BytesIO
+import json
+import os
 from pathlib import Path
 
+from fontTools.ttLib import TTCollection, TTFont, TTLibError
+from fontTools.ttLib.tables import _f_v_a_r, _n_a_m_e
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer, default_font_path
@@ -16,6 +20,14 @@ class ImageSource:
     exif: bytes | None
     icc_profile: bytes | None
     original_size: tuple[int, int]
+
+
+@dataclass(frozen=True, slots=True)
+class FontChoice:
+    label: str
+    path: str
+    index: int = 0
+    variation: tuple[float, ...] = ()
 
 
 def load_image(path: str | Path) -> ImageSource:
@@ -59,42 +71,131 @@ def _font(layer: WatermarkLayer, size: int) -> ImageFont.FreeTypeFont | ImageFon
     for path in (layer.font_path, default_font_path()):
         if path:
             try:
-                return ImageFont.truetype(path, size)
-            except OSError:
+                font = ImageFont.truetype(path, size, index=layer.font_index if path == layer.font_path else 0)
+                if path == layer.font_path and layer.font_variation:
+                    font.set_variation_by_axes(layer.font_variation)
+                return font
+            except (OSError, ValueError):
                 pass
     return ImageFont.load_default()
 
 
-@lru_cache(maxsize=1)
-def system_fonts() -> dict[str, str]:
-    fonts: dict[str, str] = {}
-    directory = Path("C:/Windows/Fonts")
-    registered_paths: set[Path] = set()
+_FONT_EXTENSIONS = {".ttf", ".otf", ".ttc", ".otc"}
+_FONT_LANGUAGES = {
+    "zh": (0x804, 0x411, 0x412, 0x409),
+    "ja": (0x411, 0x804, 0x412, 0x409),
+    "en": (0x804, 0x411, 0x412, 0x409),
+    "es": (0x804, 0x411, 0x412, 0x40A, 0x409),
+}
+
+
+def _font_sources() -> list[Path]:
+    system_directory = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+    user_directory = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft/Windows/Fonts"
+    paths = {
+        path.resolve()
+        for directory in (system_directory, user_directory)
+        if directory.is_dir()
+        for path in directory.iterdir()
+        if path.suffix.lower() in _FONT_EXTENSIONS
+    }
     try:
         import winreg
 
         for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
-            with winreg.OpenKey(root, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts") as key:
-                index = 0
-                while True:
-                    try:
-                        name, filename, _ = winreg.EnumValue(key, index)
-                    except OSError:
-                        break
-                    index += 1
-                    path = Path(str(filename))
-                    if not path.is_absolute():
-                        path = directory / path
-                    if path.is_file():
-                        display_name = name.removesuffix(" (TrueType)").split(" & ", 1)[0]
-                        fonts.setdefault(display_name, str(path))
-                        registered_paths.add(path.resolve())
+            try:
+                with winreg.OpenKey(root, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts") as key:
+                    index = 0
+                    while True:
+                        try:
+                            _, filename, _ = winreg.EnumValue(key, index)
+                        except OSError:
+                            break
+                        index += 1
+                        path = Path(str(filename))
+                        candidates = (path,) if path.is_absolute() else (system_directory / path, user_directory / path)
+                        paths.update(candidate.resolve() for candidate in candidates if candidate.is_file() and candidate.suffix.lower() in _FONT_EXTENSIONS)
+            except OSError:
+                continue
     except (ImportError, OSError):
         pass
-    for path in [*directory.glob("*.ttf"), *directory.glob("*.otf"), *directory.glob("*.ttc")]:
-        if path.resolve() not in registered_paths:
-            fonts.setdefault(path.stem, str(path))
-    return dict(sorted(fonts.items()))
+    return sorted(paths, key=lambda path: path.name.casefold())
+
+
+def _font_cache_path() -> Path:
+    return Path(os.environ.get("LOCALAPPDATA", ".")) / "MeiWatermark" / "cache" / "fonts.json"
+
+
+def _font_name(table, name_ids: tuple[int, ...], language: str) -> str:  # type: ignore[no-untyped-def]
+    for name_id in name_ids:
+        for locale in _FONT_LANGUAGES[language]:
+            record = table.getName(name_id, 3, 1, locale)
+            if record:
+                return record.toUnicode()
+        for record in table.names:
+            if record.nameID == name_id:
+                try:
+                    return record.toUnicode()
+                except UnicodeError:
+                    continue
+    return ""
+
+
+def _labels(table, style_id: int | None = None) -> dict[str, str]:  # type: ignore[no-untyped-def]
+    labels: dict[str, str] = {}
+    for language in _FONT_LANGUAGES:
+        family = _font_name(table, (16, 1), language) or "Unknown font"
+        style = _font_name(table, (style_id,) if style_id else (17, 2), language)
+        labels[language] = f"{family} · {style}" if style else family
+    return labels
+
+
+def _font_entries(path: Path) -> list[dict[str, object]]:
+    collection = None
+    fonts = []
+    try:
+        with path.open("rb") as file:
+            if file.read(4) not in {b"\x00\x01\x00\x00", b"OTTO", b"true", b"ttcf"}:
+                return []
+        collection = TTCollection(path, lazy=True) if path.suffix.lower() in {".ttc", ".otc"} else None
+        fonts = collection.fonts if collection else [TTFont(path, lazy=True)]
+        entries: list[dict[str, object]] = []
+        for index, font in enumerate(fonts):
+            table = font["name"]
+            entries.append({"path": str(path), "index": index, "variation": [], "labels": _labels(table)})
+            if "fvar" in font:
+                axes = font["fvar"].axes
+                for instance in font["fvar"].instances:
+                    entries.append({"path": str(path), "index": index, "variation": [float(instance.coordinates.get(axis.axisTag, axis.defaultValue)) for axis in axes], "labels": _labels(table, instance.subfamilyNameID)})
+        return entries
+    except (OSError, KeyError, TTLibError, ValueError):
+        return []
+    finally:
+        if collection:
+            collection.close()
+        else:
+            for font in fonts:
+                font.close()
+
+
+def system_fonts(language: str) -> list[FontChoice]:
+    sources = _font_sources()
+    fingerprint = [[str(path), path.stat().st_mtime_ns, path.stat().st_size] for path in sources]
+    cache_path = _font_cache_path()
+    try:
+        cached = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        cached = {}
+    entries = cached.get("fonts") if cached.get("sources") == fingerprint else None
+    if not isinstance(entries, list):
+        entries = [entry for path in sources for entry in _font_entries(path)]
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps({"sources": fingerprint, "fonts": entries}, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
+    choices = [FontChoice(str(entry["labels"].get(language, entry["labels"].get("zh", "Unknown font"))), str(entry["path"]), int(entry.get("index", 0)), tuple(float(value) for value in entry.get("variation", []))) for entry in entries if isinstance(entry, dict) and isinstance(entry.get("labels"), dict) and entry.get("path")]
+    return sorted(choices, key=lambda choice: choice.label.casefold())
 
 
 def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:

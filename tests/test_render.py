@@ -77,7 +77,16 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(result.getpixel((6, 2))[0], 0)
 
     def test_system_font_names_do_not_contain_null_characters(self) -> None:
-        self.assertTrue(all("\x00" not in name and "\ufffd" not in name for name in system_fonts()))
+        fonts = system_fonts("zh")
+        self.assertTrue(all("\x00" not in choice.label and "\ufffd" not in choice.label for choice in fonts))
+        self.assertTrue(all(Path(choice.path).is_file() for choice in fonts))
+
+    def test_variable_font_instances_are_enumerated(self) -> None:
+        fonts = system_fonts("zh")
+        noto = [choice for choice in fonts if Path(choice.path).name == "NotoSansSC-VF.ttf"]
+        if noto:
+            self.assertGreaterEqual(len(noto), 7)
+            self.assertIn((900.0,), {choice.variation for choice in noto})
 
     def test_preview_and_thumbnail_are_bounded_before_display(self) -> None:
         with TemporaryDirectory() as directory:

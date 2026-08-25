@@ -54,6 +54,8 @@ class WatermarkLayer:
     image_path: str | None = None
     text: str = "© 2025"
     font_path: str | None = None
+    font_index: int = 0
+    font_variation: list[float] = field(default_factory=list)
     color: tuple[int, int, int] | None = (255, 255, 255)
     stroke_color: tuple[int, int, int] | None = (0, 0, 0)
     stroke_width: int = 1

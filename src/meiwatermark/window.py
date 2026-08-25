@@ -5,7 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PIL import Image
-from PySide6.QtCore import QEvent, QSize, Qt, QTimer, QUrl
+from PySide6.QtCore import QEvent, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -48,7 +48,7 @@ from .presets import (
     preset_directory,
     save_preset,
 )
-from .render import estimate_size, export_size, load_thumbnail, load_preview, render, system_fonts
+from .render import FontChoice, estimate_size, export_size, load_thumbnail, load_preview, render, system_fonts
 
 
 ACCENT = "#A40B5E"
@@ -132,6 +132,17 @@ class ResetSlider(QSlider):
         event.accept()
 
 
+class FontLoader(QThread):
+    ready = Signal(object)
+
+    def __init__(self, language: str, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.language = language
+
+    def run(self) -> None:
+        self.ready.emit(system_fonts(self.language))
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -146,6 +157,7 @@ class MainWindow(QMainWindow):
         self.source = None
         self.settings = ExportSettings()
         self.worker: ExportWorker | None = None
+        self.font_loaders: list[FontLoader] = []
         self._loading_controls = False
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
@@ -674,10 +686,26 @@ class MainWindow(QMainWindow):
         text = QLineEdit(layer.text)
         form.addRow(self.t("文字"), text)
         font = QComboBox()
-        font.addItem(self.t("系统默认"), "")
-        for name, path in system_fonts().items():
-            font.addItem(name, path)
-        font.setCurrentIndex(max(0, font.findData(layer.font_path)))
+        font.addItem(self.t("系统默认"), None)
+        font.addItem(self.t("正在读取字体…"), None)
+        font.setEnabled(False)
+
+        def populate_fonts(choices: list[FontChoice]) -> None:
+            selected = (layer.font_path, layer.font_index, tuple(layer.font_variation))
+            font.clear()
+            font.addItem(self.t("系统默认"), None)
+            for choice in choices:
+                font.addItem(choice.label, choice)
+            index = next((position for position in range(1, font.count()) if (choice := font.itemData(position)) and (choice.path, choice.index, choice.variation) == selected), 0)
+            font.setCurrentIndex(index)
+            font.setEnabled(True)
+
+        loader = FontLoader(self.language, self)
+        loader.ready.connect(populate_fonts)
+        loader.finished.connect(lambda: self.font_loaders.remove(loader) if loader in self.font_loaders else None)
+        loader.finished.connect(loader.deleteLater)
+        self.font_loaders.append(loader)
+        loader.start()
         form.addRow(self.t("字体"), font)
         text_color = QPushButton()
         stroke_color = QPushButton()
@@ -715,7 +743,10 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted or not text.text().strip():
             return False
         layer.text = text.text().strip()
-        layer.font_path = font.currentData() or None
+        choice = font.currentData()
+        layer.font_path = choice.path if isinstance(choice, FontChoice) else None
+        layer.font_index = choice.index if isinstance(choice, FontChoice) else 0
+        layer.font_variation = list(choice.variation) if isinstance(choice, FontChoice) else []
         layer.color = None if text_none.isChecked() else tuple(text_color.property("color").getRgb()[:3])
         layer.stroke_color = None if stroke_none.isChecked() else tuple(stroke_color.property("color").getRgb()[:3])
         layer.stroke_width = int(stroke_width.text() or 0)
