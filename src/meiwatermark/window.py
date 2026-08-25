@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 from PySide6.QtCore import QEvent, QSize, Qt, QThread, QTimer, QUrl, Signal
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QPainter, QPen, QPixmap
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QDrag, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -72,8 +72,31 @@ def pen_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+class LayerList(QListWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.drag_pixmap = QPixmap()
+        self.drag_hotspot = None
+
+    def set_drag_preview(self, pixmap: QPixmap, hotspot) -> None:  # type: ignore[no-untyped-def]
+        self.drag_pixmap, self.drag_hotspot = pixmap, hotspot
+
+    def startDrag(self, supported_actions: Qt.DropAction) -> None:
+        index = self.currentIndex()
+        if not index.isValid():
+            return
+        drag = QDrag(self)
+        drag.setMimeData(self.model().mimeData([index]))
+        if not self.drag_pixmap.isNull() and self.drag_hotspot is not None:
+            drag.setPixmap(self.drag_pixmap)
+            drag.setHotSpot(self.drag_hotspot)
+        drag.exec(supported_actions, Qt.DropAction.MoveAction)
+        self.drag_pixmap = QPixmap()
+        self.drag_hotspot = None
+
+
 class LayerRow(QWidget):
-    def __init__(self, owner: QListWidget, item: QListWidgetItem, layer: WatermarkLayer, edit, name_text: str, edit_tooltip: str) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, owner: LayerList, item: QListWidgetItem, layer: WatermarkLayer, edit, name_text: str, edit_tooltip: str) -> None:  # type: ignore[no-untyped-def]
         super().__init__()
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.owner, self.item, self.drag_start = owner, item, None
@@ -104,11 +127,13 @@ class LayerRow(QWidget):
     def mousePressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         self.owner.setCurrentItem(self.item)
         self.drag_start = event.position()
+        self.owner.set_drag_preview(self.grab(), self.drag_start.toPoint())
         event.accept()
 
     def mouseMoveEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         if self.drag_start and event.buttons() & Qt.MouseButton.LeftButton:
             if (event.position() - self.drag_start).manhattanLength() >= 4:
+                self.drag_start = None
                 self.owner.startDrag(Qt.DropAction.MoveAction)
         event.accept()
 
@@ -271,7 +296,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(5, 5, 5, 5)
         layout.addWidget(self._heading(self.t("水印图层")))
-        self.layer_list = QListWidget()
+        self.layer_list = LayerList()
         self.layer_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.layer_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.layer_list.currentItemChanged.connect(lambda *_: self.load_layer_controls())

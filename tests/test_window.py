@@ -5,14 +5,15 @@ import unittest
 from unittest.mock import patch
 
 from PIL import Image
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from meiwatermark.model import ExportSettings, LayerKind, ResizeMode, WatermarkLayer
 from meiwatermark.presets import save_preset
 from meiwatermark.i18n import translate
-from meiwatermark.window import MainWindow, ThumbnailDelegate, display_image_name
+from meiwatermark.window import LayerList, MainWindow, ThumbnailDelegate, display_image_name
 
 
 class WindowTests(unittest.TestCase):
@@ -27,6 +28,14 @@ class WindowTests(unittest.TestCase):
         window = MainWindow()
         self.assertIsInstance(window.thumbnails.itemDelegate(), ThumbnailDelegate)
         window.close()
+
+    def test_layer_list_uses_the_row_mouse_position_for_drag_preview(self) -> None:
+        layer_list = LayerList()
+        preview = QPixmap(20, 20)
+        layer_list.set_drag_preview(preview, QPoint(7, 11))
+        self.assertEqual(layer_list.drag_hotspot, QPoint(7, 11))
+        self.assertEqual((layer_list.drag_pixmap.width(), layer_list.drag_pixmap.height()), (20, 20))
+        layer_list.close()
 
     def test_combo_boxes_use_the_flat_arrow_style(self) -> None:
         window = MainWindow()
