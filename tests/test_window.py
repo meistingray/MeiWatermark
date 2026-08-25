@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication
 
 from meiwatermark.model import ExportSettings, LayerKind, ResizeMode, WatermarkLayer
 from meiwatermark.presets import save_preset
+from meiwatermark.i18n import translate
 from meiwatermark.window import MainWindow, ThumbnailDelegate, display_image_name
 
 
@@ -25,6 +26,18 @@ class WindowTests(unittest.TestCase):
     def test_thumbnail_selection_has_no_native_focus_outline(self) -> None:
         window = MainWindow()
         self.assertIsInstance(window.thumbnails.itemDelegate(), ThumbnailDelegate)
+        window.close()
+
+    def test_compact_unit_translations(self) -> None:
+        self.assertEqual([translate("百分比", language) for language in ("zh", "en", "es", "ja")], ["%", "%", "%", "%"])
+        self.assertEqual([translate("视觉比例", language) for language in ("zh", "en", "es", "ja")], ["比例", "Ratio", "Ratio", "比率"])
+
+    def test_unit_choices_update_after_language_switch(self) -> None:
+        window = MainWindow()
+        for language, ratio in (("zh", "比例"), ("en", "Ratio"), ("es", "Ratio"), ("ja", "比率")):
+            window.set_language(language)
+            self.assertEqual(window.size_unit.itemText(0), "%")
+            self.assertEqual(window.horizontal_unit.itemText(0), ratio)
         window.close()
 
     def test_applying_preset_restores_all_export_controls(self) -> None:

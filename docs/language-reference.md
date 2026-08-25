@@ -19,6 +19,7 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 图片水印 | Image Watermark | Imagen | 画像透かし |
 | 选中图层属性 | Selected Layer | Capa seleccionada | 選択中のレイヤー |
 | 大小 / 透明度 / 旋转 | Size / Opacity / Rotation | Tamaño / Opacidad / Rotación | サイズ / 不透明度 / 回転 |
+| 百分比 / 视觉比例 / px | % / Ratio / px | % / Ratio / px | % / 比率 / px |
 | 水平内嵌 / 垂直内嵌 | Horizontal / Vertical | Horizontal / Vertical | 横方向 / 縦方向 |
 | 九宫格定位 | Anchor Position | Posición de anclaje | アンカー位置 |
 | 实时预览 | Live Preview | Vista previa | ライブプレビュー |
