@@ -510,7 +510,7 @@ class MainWindow(QMainWindow):
         return widget
 
     def _apply_style(self) -> None:
-        arrow = QUrl.fromLocalFile(str(Path(__file__).parent / "assets" / "down-arrow.svg")).toString()
+        arrow = (Path(__file__).parent / "assets" / "down-arrow.svg").resolve().as_posix()
         self.setStyleSheet(f"""
             QWidget {{ font-size: 9pt; color: #202124; }}
             QMainWindow, QWidget {{ background: #f5f6f8; }}
@@ -521,7 +521,7 @@ class MainWindow(QMainWindow):
             QPushButton:hover, QComboBox:hover {{ border-color: {ACCENT}; }}
             QComboBox {{ padding-right: 26px; }}
             QComboBox::drop-down {{ width: 22px; border: none; background: transparent; }}
-            QComboBox::down-arrow {{ image: url({arrow}); width: 8px; height: 5px; }}
+            QComboBox::down-arrow {{ image: url("{arrow}"); width: 8px; height: 5px; }}
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
             QPushButton#presetSave {{ color: {ACCENT}; border-color: {ACCENT}; font-weight: 600; }}
             QLabel#heading {{ font-size: 10pt; font-weight: 600; margin: 2px 0; }}

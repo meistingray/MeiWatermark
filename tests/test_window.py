@@ -28,8 +28,9 @@ class WindowTests(unittest.TestCase):
         self.assertIsInstance(window.thumbnails.itemDelegate(), ThumbnailDelegate)
         window.close()
 
-    def test_combo_boxes_use_the_flat_arrow_asset(self) -> None:
+    def test_combo_boxes_use_the_flat_arrow_style(self) -> None:
         window = MainWindow()
+        self.assertIn("QComboBox::drop-down", window.styleSheet())
         self.assertIn("down-arrow.svg", window.styleSheet())
         window.close()
 
