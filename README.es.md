@@ -17,11 +17,12 @@ Exporta lotes en JPEG, PNG y WebP con control de calidad, restricciones de tama�
 ## Funciones
 
 - **Marcas de agua multicapa**: combine varias capas de imagen y texto; active, ordene y arrastre las capas.
-- **Resultado visual coherente**: defina el tamaño por porcentaje de ancho, alto, lado corto o píxeles; en las marcas de texto, el tamaño corresponde al lado mayor del texto renderizado, no al tamaño de fuente.
+- **Resultado visual coherente**: defina el tamaño por porcentaje del lado corto o píxeles; en las marcas de texto, el tamaño corresponde al lado mayor del texto renderizado, no al tamaño de fuente.
 - **Posicionamiento preciso**: controle el anclaje de nueve puntos, los márgenes horizontal y vertical, la opacidad y la rotación. Los márgenes pueden ser negativos.
 - **Marcas de texto**: use la lista de fuentes del sistema con nombres localizados; configure por separado el color del texto y del contorno, incluso sin color, y el grosor del contorno.
 - **Marcas en mosaico**: cree marcas repetidas de texto o imagen en toda la foto, con espacio en porcentaje del lado corto y disposición alternada.
-- **Vista previa en tiempo real**: revise el resultado mientras trabaja; importe imágenes arrastrándolas a cualquier zona de la ventana y la última imagen añadida se seleccionará y mostrará automáticamente.
+- **Vista previa en tiempo real**: arrastre imágenes a cualquier zona de la ventana; la vista actual permanece visible mientras se carga la siguiente foto, y la última imagen añadida se seleccionará y mostrará automáticamente.
+- **Protecciones de renderizado**: los tamaños en píxeles superiores a 4096 px se ajustan a 4096; las marcas porcentuales cuyo tamaño renderizado o cantidad de mosaicos supere el límite se notifican y se omiten para esa imagen.
 - **Gestión de fotos**: use `Delete`, el menú contextual o **Vaciar lista** para quitar fotos de la lista actual. Los archivos originales nunca se eliminan.
 - **Exportación por lotes**: JPEG, PNG y WebP; calidad predeterminada de 100 y límites opcionales por lado largo, lado corto o escala.
 - **Control de salida**: estima el tamaño del archivo de la imagen actual antes de exportar; permite conservar EXIF y perfiles ICC; admite rutas relativas a cada imagen original.

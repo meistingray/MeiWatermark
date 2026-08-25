@@ -21,7 +21,8 @@ Batch export to JPEG, PNG, and WebP with quality control, resize constraints, fi
 - **Precise placement**: control nine-grid anchors, horizontal and vertical insets, opacity, and rotation independently. Insets can be negative.
 - **Text watermarks**: use the system font list with localized font names; set text and outline colors independently, including no color, and choose an outline width.
 - **Tiled watermarks**: create repeated full-image text or image watermarks, with short-edge percentage gaps and optional staggering.
-- **Live preview**: review the result as you work; drag images anywhere into the window, with the newest imported image selected and brought into view automatically.
+- **Live preview**: drag images anywhere into the window; the current preview remains visible while the next photo loads, and the newest imported image is selected and brought into view automatically.
+- **Render safeguards**: pixel watermark sizes above 4096 px are adjusted to 4096; percentage watermarks whose rendered size or tile count exceeds the safe range are reported and skipped for that image.
 - **Photo list management**: use the Delete key, the context menu, or Clear List to remove photos from the current list. Original files are never deleted.
 - **Batch export**: JPEG, PNG, and WebP support; quality defaults to 100, with optional long-edge, short-edge, or scale-based resize limits.
 - **Output control**: estimate the current image file size before export; retain EXIF and ICC profiles when needed; support paths relative to each original image.
