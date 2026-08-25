@@ -240,6 +240,7 @@ class MainWindow(QMainWindow):
         self.paths: list[Path] = []
         self.layers: list[WatermarkLayer] = []
         self.source = None
+        self.source_path: Path | None = None
         self.settings = ExportSettings()
         self.worker: ExportWorker | None = None
         self.estimate_worker: EstimateWorker | None = None
@@ -650,6 +651,7 @@ class MainWindow(QMainWindow):
             QComboBox QAbstractItemView::item {{ background: #fff; padding: 2px 7px; }}
             QComboBox QAbstractItemView::item:selected {{ background: #f5dce9; color: #202124; }}
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
+            QPushButton#primary:pressed {{ background: #760743; border-color: #5b0635; padding: 2px 7px 0 7px; }}
             QPushButton#presetSave {{ color: {ACCENT}; border-color: {ACCENT}; font-weight: 600; }}
             QLabel#heading {{ font-size: 10pt; font-weight: 600; margin: 2px 0; }}
             QLabel#preview {{ font-size: 12pt; background: #262a30; border: 1px solid #363b43; color: #c8ccd2; }}
@@ -737,9 +739,6 @@ class MainWindow(QMainWindow):
         if row < 0:
             return
         path = self.thumbnails.item(row).data(Qt.ItemDataRole.UserRole)
-        self.source = None
-        self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
-        self.preview.setPixmap(QPixmap())
         self._refresh_estimate_labels()
         self._load_preview(path)
 
@@ -761,12 +760,17 @@ class MainWindow(QMainWindow):
     def _preview_loaded(self, path: Path, source: ImageSource) -> None:
         if self._selected_path() == path:
             self.source = source
+            self.source_path = path
             self.schedule_preview()
             self.schedule_estimate()
 
     def _preview_failed(self, path: Path, error: str) -> None:
         if self._selected_path() == path:
             self.source = None
+            self.source_path = None
+            self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
+            self.preview.setPixmap(QPixmap())
+            self._refresh_estimate_labels()
             QMessageBox.warning(self, self.t("无法读取图片"), error)
 
     def _preview_finished(self, worker: ImageLoader) -> None:
@@ -791,6 +795,7 @@ class MainWindow(QMainWindow):
             self.thumbnails.setCurrentRow(min(row, self.thumbnails.count() - 1))
         else:
             self.source = None
+            self.source_path = None
             self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
             self.preview.setPixmap(QPixmap())
             self.current_estimate.setText(self.t("当前照片约 —"))
@@ -811,6 +816,7 @@ class MainWindow(QMainWindow):
             self.preview_loader.cancel()
         self.thumbnails.clear()
         self.source = None
+        self.source_path = None
         self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
         self.preview.setPixmap(QPixmap())
         self.current_estimate.setText(self.t("当前照片约 —"))
@@ -1201,10 +1207,8 @@ class MainWindow(QMainWindow):
 
     def schedule_estimate(self) -> None:
         self._refresh_estimate_labels()
-        if self.source is None:
-            return
         selected = self._selected_path()
-        if selected is None or self._estimate_key(selected) in self._estimate_cache:
+        if self.source is None or selected is None or self.source_path != selected or self._estimate_key(selected) in self._estimate_cache:
             return
         self.estimate_timer.start(1000)
 
@@ -1273,10 +1277,8 @@ class MainWindow(QMainWindow):
             self.output_path.setText(path)
 
     def update_estimate(self) -> None:
-        if self.source is None:
-            return
         selected = self._selected_path()
-        if selected is None:
+        if self.source is None or selected is None or self.source_path != selected:
             return
         key = self._estimate_key(selected)
         if key in self._estimate_cache or key in self._estimate_active_keys:

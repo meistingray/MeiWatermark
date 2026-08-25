@@ -8,10 +8,10 @@ from PIL import Image
 from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QCheckBox, QDialog, QLabel, QPushButton, QRadioButton, QToolButton
+from PySide6.QtWidgets import QApplication, QCheckBox, QDialog, QLabel, QListWidgetItem, QPushButton, QRadioButton, QToolButton
 
 from meiwatermark.model import ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
-from meiwatermark.render import MAX_STAMP_SIZE
+from meiwatermark.render import MAX_STAMP_SIZE, ImageSource
 from meiwatermark.presets import save_preset
 from meiwatermark.i18n import translate
 from meiwatermark.window import LayerDelegate, LayerList, MainWindow, ThumbnailDelegate, display_image_name
@@ -111,6 +111,13 @@ class WindowTests(unittest.TestCase):
         self.assertIn("down-arrow.svg", window.styleSheet())
         self.assertIn("width: 18px", window.styleSheet())
         self.assertNotIn("padding-right: 26px", window.styleSheet())
+        window.close()
+
+    def test_primary_buttons_have_a_pressed_style(self) -> None:
+        window = MainWindow()
+        self.assertIn("QPushButton#primary:pressed", window.styleSheet())
+        self.assertIn("background: #760743", window.styleSheet())
+        self.assertIn("padding: 2px 7px 0 7px", window.styleSheet())
         window.close()
 
     def test_unchanged_estimate_is_not_scheduled_again(self) -> None:
@@ -300,6 +307,27 @@ class WindowTests(unittest.TestCase):
             self.wait_for_preview(window, latest)
             self.assertEqual(window.thumbnails.currentItem().data(Qt.ItemDataRole.UserRole), latest)
             window.close()
+
+    def test_previous_preview_stays_visible_while_the_next_photo_loads(self) -> None:
+        first, second = Path("first.png"), Path("second.png")
+        window = MainWindow()
+        for path in (first, second):
+            item = QListWidgetItem(path.name)
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            window.thumbnails.addItem(item)
+        previous_source = ImageSource(Image.new("RGBA", (12, 12), "white"), None, None, (12, 12))
+        window.source = previous_source
+        window.source_path = first
+        previous_pixmap = QPixmap(1, 1)
+        previous_pixmap.fill(Qt.GlobalColor.white)
+        window.preview.setPixmap(previous_pixmap)
+        with patch.object(window, "_load_preview"):
+            window.thumbnails.setCurrentRow(1)
+        self.assertIs(window.source, previous_source)
+        self.assertFalse(window.preview.pixmap().isNull())
+        window.schedule_estimate()
+        self.assertFalse(window.estimate_timer.isActive())
+        window.close()
 
     def test_unreadable_photo_clears_the_previous_preview(self) -> None:
         with TemporaryDirectory() as directory, patch("meiwatermark.window.QMessageBox.warning"):
