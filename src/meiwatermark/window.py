@@ -120,6 +120,18 @@ class ThumbnailDelegate(QStyledItemDelegate):
         super().paint(painter, clean_option, index)
 
 
+class ResetSlider(QSlider):
+    def __init__(self, minimum: int, maximum: int, value: int, reset_value: int = 0) -> None:
+        super().__init__(Qt.Orientation.Horizontal)
+        self.reset_value = reset_value
+        self.setRange(minimum, maximum)
+        self.setValue(value)
+
+    def mouseDoubleClickEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        self.setValue(self.reset_value)
+        event.accept()
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -355,18 +367,8 @@ class MainWindow(QMainWindow):
         self.format = QComboBox()
         self.format.addItems(["JPEG", "PNG", "WEBP"])
         form.addRow(self.t("格式"), self.format)
-        self.quality = QSlider(Qt.Orientation.Horizontal)
-        self.quality.setRange(1, 100)
-        self.quality.setValue(100)
-        self.quality_number = QLabel("100")
-        self.quality_number.setFixedWidth(28)
-        self.quality_number.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        quality_row = QHBoxLayout()
-        quality_row.setContentsMargins(0, 0, 0, 0)
-        quality_row.setSpacing(5)
-        quality_row.addWidget(self.quality, 1)
-        quality_row.addWidget(self.quality_number)
-        form.addRow(self.t("质量"), quality_row)
+        self.quality, self.quality_number = self._slider_editor(1, 100, 100, 100)
+        form.addRow(self.t("质量"), self._slider_widget(self.quality, self.quality_number))
         self.resize_mode = QComboBox()
         self.resize_mode.addItems([self.t(value) for value in ("不约束", "最长边", "最短边", "比例")])
         form.addRow(self.t("尺寸约束"), self.resize_mode)
@@ -460,17 +462,25 @@ class MainWindow(QMainWindow):
         return wrapper
 
     @staticmethod
-    def _slider_editor(minimum: int, maximum: int, value: int) -> tuple[QSlider, QLabel]:
-        slider = QSlider(Qt.Orientation.Horizontal)
-        slider.setRange(minimum, maximum)
-        slider.setValue(value)
-        number = QLabel(str(value))
-        number.setFixedWidth(28)
+    def _slider_editor(minimum: int, maximum: int, value: int, reset_value: int = 0) -> tuple[QSlider, QLineEdit]:
+        slider = ResetSlider(minimum, maximum, value, reset_value)
+        number = QLineEdit(str(value))
+        number.setValidator(QIntValidator(minimum, maximum, number))
+        number.setFixedWidth(36)
         number.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        slider.valueChanged.connect(lambda current: number.setText(str(current)))
+
+        def apply_number() -> None:
+            try:
+                slider.setValue(max(minimum, min(maximum, int(number.text()))))
+            except ValueError:
+                number.setText(str(slider.value()))
+
+        number.editingFinished.connect(apply_number)
         return slider, number
 
     @staticmethod
-    def _slider_widget(slider: QSlider, number: QLabel) -> QWidget:
+    def _slider_widget(slider: QSlider, number: QLineEdit) -> QWidget:
         widget = QWidget()
         widget.setObjectName("sliderEditor")
         row = QHBoxLayout(widget)
@@ -528,9 +538,11 @@ class MainWindow(QMainWindow):
             QToolButton#anchor:checked {{ border: none; background: #f9e3ef; color: {ACCENT}; }}
             QFrame#propertyPanel {{ background: #ffffff; border: 1px solid #dfe2e7; border-radius: 3px; }}
             QFrame#propertyPanel QLabel, QWidget#propertyRow, QWidget#stepper, QWidget#sliderEditor, QWidget#anchorGrid {{ background: transparent; }}
-            QSlider, QSlider::groove:horizontal, QSlider::add-page:horizontal {{ border: none; background: rgba(0, 0, 0, 0); }}
-            QSlider::groove:horizontal, QSlider::add-page:horizontal, QSlider::sub-page:horizontal {{ height: 3px; }}
-            QSlider::sub-page:horizontal {{ border: none; background: {ACCENT}; }}
+            QSlider, QSlider::groove:horizontal {{ border: none; background: transparent; }}
+            QSlider::groove:horizontal {{ height: 3px; margin: 0; }}
+            QSlider::add-page:horizontal, QSlider::sub-page:horizontal {{ height: 3px; margin: 0; border: none; }}
+            QSlider::add-page:horizontal {{ background: transparent; }}
+            QSlider::sub-page:horizontal {{ background: {ACCENT}; }}
             QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background: {ACCENT}; }}
             QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
         """)

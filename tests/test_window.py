@@ -40,6 +40,21 @@ class WindowTests(unittest.TestCase):
             self.assertEqual(window.horizontal_unit.itemText(0), ratio)
         window.close()
 
+    def test_slider_fields_accept_direct_values_and_double_click_resets(self) -> None:
+        window = MainWindow()
+        for field, slider, value in ((window.opacity_number, window.opacity, "35"), (window.rotation_number, window.rotation, "-45"), (window.quality_number, window.quality, "72")):
+            field.setText(value)
+            field.editingFinished.emit()
+            self.assertEqual(slider.value(), int(value))
+        window.show()
+        QTest.mouseDClick(window.opacity, Qt.MouseButton.LeftButton)
+        QTest.mouseDClick(window.rotation, Qt.MouseButton.LeftButton)
+        QTest.mouseDClick(window.quality, Qt.MouseButton.LeftButton)
+        self.assertEqual(window.opacity.value(), 0)
+        self.assertEqual(window.rotation.value(), 0)
+        self.assertEqual(window.quality.value(), 100)
+        window.close()
+
     def test_applying_preset_restores_all_export_controls(self) -> None:
         settings = ExportSettings(resize_mode=ResizeMode.SCALE, resize_value=63, allow_upscale=True, keep_exif=False, keep_icc=False, output_path="/Mei")
         with TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}):
