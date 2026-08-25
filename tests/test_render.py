@@ -77,7 +77,7 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(result.getpixel((6, 2))[0], 0)
 
     def test_system_font_names_do_not_contain_null_characters(self) -> None:
-        self.assertTrue(all("\x00" not in name for name in system_fonts()))
+        self.assertTrue(all("\x00" not in name and "\ufffd" not in name for name in system_fonts()))
 
     def test_preview_and_thumbnail_are_bounded_before_display(self) -> None:
         with TemporaryDirectory() as directory:

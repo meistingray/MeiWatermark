@@ -280,7 +280,7 @@ class MainWindow(QMainWindow):
         properties.addWidget(self._property_row(self.t("水平内嵌"), self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit))
         self.vertical_value, self.vertical_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
         properties.addWidget(self._property_row(self.t("垂直内嵌"), self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit))
-        self.opacity, self.opacity_number = self._slider_editor(0, 100, 80)
+        self.opacity, self.opacity_number = self._slider_editor(0, 100, 80, 80)
         properties.addWidget(self._property_row(self.t("透明度"), self._slider_widget(self.opacity, self.opacity_number)))
         self.rotation, self.rotation_number = self._slider_editor(-180, 180, 0)
         properties.addWidget(self._property_row(self.t("旋转"), self._slider_widget(self.rotation, self.rotation_number)))

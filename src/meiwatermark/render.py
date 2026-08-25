@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
-from struct import unpack
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -70,48 +69,32 @@ def _font(layer: WatermarkLayer, size: int) -> ImageFont.FreeTypeFont | ImageFon
 def system_fonts() -> dict[str, str]:
     fonts: dict[str, str] = {}
     directory = Path("C:/Windows/Fonts")
-    for path in [*directory.glob("*.ttf"), *directory.glob("*.otf"), *directory.glob("*.ttc")]:
-        try:
-            name = _font_name(path)
-            fonts.setdefault(name, str(path))
-        except OSError:
-            continue
-    return dict(sorted(fonts.items()))
-
-
-def _font_name(path: Path) -> str:
-    fallback = ImageFont.truetype(path, 12).getname()[0]
+    registered_paths: set[Path] = set()
     try:
-        with path.open("rb") as file:
-            if file.read(4) == b"ttcf":
-                file.read(4)
-                offset = unpack(">I", file.read(4))[0]
-                start = unpack(">I", file.read(4))[0] if offset else 0
-            else:
-                start = 0
-            file.seek(start + 4)
-            table_count = unpack(">H", file.read(2))[0]
-            file.seek(6, 1)
-            name_offset = name_length = 0
-            for _ in range(table_count):
-                tag, _, offset, length = unpack(">4sIII", file.read(16))
-                if tag == b"name":
-                    name_offset, name_length = offset, length
-            if not name_offset:
-                return fallback
-            file.seek(name_offset + 2)
-            count, strings_offset = unpack(">HH", file.read(4))
-            records = [unpack(">HHHHHH", file.read(12)) for _ in range(count)]
-            names: list[str] = []
-            for platform, encoding, _, name_id, length, offset in records:
-                if name_id != 1 or platform != 3 or encoding not in (1, 10):
-                    continue
-                file.seek(name_offset + strings_offset + offset)
-                raw = file.read(length)
-                names.append(raw.decode("utf-16-be", errors="ignore"))
-            return next((name for name in names if any(ord(char) > 127 for char in name)), names[0] if names else fallback)
-    except (OSError, UnicodeError, ValueError):
-        return fallback
+        import winreg
+
+        for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            with winreg.OpenKey(root, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts") as key:
+                index = 0
+                while True:
+                    try:
+                        name, filename, _ = winreg.EnumValue(key, index)
+                    except OSError:
+                        break
+                    index += 1
+                    path = Path(str(filename))
+                    if not path.is_absolute():
+                        path = directory / path
+                    if path.is_file():
+                        display_name = name.removesuffix(" (TrueType)").split(" & ", 1)[0]
+                        fonts.setdefault(display_name, str(path))
+                        registered_paths.add(path.resolve())
+    except (ImportError, OSError):
+        pass
+    for path in [*directory.glob("*.ttf"), *directory.glob("*.otf"), *directory.glob("*.ttc")]:
+        if path.resolve() not in registered_paths:
+            fonts.setdefault(path.stem, str(path))
+    return dict(sorted(fonts.items()))
 
 
 def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:

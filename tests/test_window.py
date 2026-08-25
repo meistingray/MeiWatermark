@@ -59,7 +59,7 @@ class WindowTests(unittest.TestCase):
         QTest.mouseDClick(window.opacity, Qt.MouseButton.LeftButton)
         QTest.mouseDClick(window.rotation, Qt.MouseButton.LeftButton)
         QTest.mouseDClick(window.quality, Qt.MouseButton.LeftButton)
-        self.assertEqual(window.opacity.value(), 0)
+        self.assertEqual(window.opacity.value(), 80)
         self.assertEqual(window.rotation.value(), 0)
         self.assertEqual(window.quality.value(), 100)
         window.close()
