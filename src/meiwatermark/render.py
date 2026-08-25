@@ -343,10 +343,7 @@ def render(base: Image.Image, layers: list[WatermarkLayer]) -> Image.Image:
             _tile(result, stamp, layer)
             continue
         position = _position(layer, result.size, stamp.size)
-        if 0 <= position[0] <= result.width - stamp.width and 0 <= position[1] <= result.height - stamp.height:
-            result.alpha_composite(stamp, position)
-        else:
-            result.paste(stamp, position, stamp)
+        result.alpha_composite(stamp, position)
     return result
 
 

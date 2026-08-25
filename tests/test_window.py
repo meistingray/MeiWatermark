@@ -182,6 +182,18 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(window.quality.value(), 100)
         window.close()
 
+    def test_resize_value_field_stays_aligned_when_its_unit_changes(self) -> None:
+        window = MainWindow()
+        window.show()
+        QTest.qWait(1)
+        window.resize_mode.setCurrentIndex(1)
+        QTest.qWait(1)
+        px_geometry = window.resize_value.geometry()
+        window.resize_mode.setCurrentIndex(3)
+        QTest.qWait(1)
+        self.assertEqual(window.resize_value.geometry(), px_geometry)
+        window.close()
+
     def test_pixel_watermark_size_is_limited_in_the_editor_and_on_add(self) -> None:
         window = MainWindow()
         layer = WatermarkLayer(LayerKind.TEXT, "text", size=MAX_STAMP_SIZE + 1, size_unit=Unit.PIXELS)

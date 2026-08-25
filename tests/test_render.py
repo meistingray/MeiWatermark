@@ -139,6 +139,15 @@ class RenderTests(unittest.TestCase):
         self.assertGreater(result.getpixel((0, 2))[0], 0)
         self.assertEqual(result.getpixel((6, 2))[0], 0)
 
+    def test_overflowing_watermark_preserves_its_opacity(self) -> None:
+        base = Image.new("RGBA", (20, 20))
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "transparent.png"
+            Image.new("RGBA", (10, 10), (255, 255, 255, 128)).save(path)
+            layer = WatermarkLayer(LayerKind.IMAGE, "transparent", image_path=str(path), size=10, size_unit=Unit.PIXELS, opacity=100, anchor=Anchor.TOP_LEFT, horizontal_inset=-5, horizontal_unit=Unit.PIXELS, vertical_inset=0)
+            result = render(base, [layer])
+        self.assertEqual(result.getpixel((0, 2)), (255, 255, 255, 128))
+
     def test_system_font_names_do_not_contain_null_characters(self) -> None:
         fonts = system_fonts("zh")
         self.assertTrue(all("\x00" not in choice.family and "\ufffd" not in choice.family for choice in fonts))

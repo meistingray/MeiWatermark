@@ -492,6 +492,7 @@ class MainWindow(QMainWindow):
         self.resize_value.setValidator(QIntValidator(1, 100000, self))
         self.resize_value.setEnabled(False)
         self.resize_value_label = QLabel(f"{self.t('约束数值')} (px)")
+        self.resize_value_label.setFixedWidth(self.resize_value_label.sizeHint().width())
         form.addRow(self.resize_value_label, self.resize_value)
         self.allow_upscale = QCheckBox(self.t("不放大"))
         self.allow_upscale.setChecked(True)
