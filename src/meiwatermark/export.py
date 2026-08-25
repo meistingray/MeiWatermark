@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
-from .model import ExportSettings, WatermarkLayer
-from .render import load_image, render, resize_for_export, save_image
+from .model import ExportSettings, ResizeMode, WatermarkLayer
+from .render import ImageSource, estimate_size, export_size, load_image, load_preview, render, resize_for_export, save_image, scaled_layers
 
 
 class ExportWorker(QThread):
@@ -42,3 +43,36 @@ class ExportWorker(QThread):
                 failures.append(f"{path.name}: {exc}")
             self.progressed.emit(index, len(self.paths), path.name)
         self.finished_batch.emit(complete, failures)
+
+
+class EstimateWorker(QThread):
+    estimated = Signal(object, float)
+    failed = Signal(object)
+    completed = Signal(object)
+
+    def __init__(self, tasks: list[tuple[tuple, Path, ImageSource | None]], layers: list[WatermarkLayer], settings: ExportSettings) -> None:
+        super().__init__()
+        self.tasks, self.layers, self.settings = tasks, layers, settings
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    def run(self) -> None:
+        results = []
+        for key, path, loaded in self.tasks:
+            if self._cancelled:
+                return
+            try:
+                source = loaded or load_preview(path, (1200, 1200))
+                layers = scaled_layers(self.layers, source.image.width / source.original_size[0])
+                sample = render(source.image, layers)
+                output_size = export_size(source.original_size, self.settings)
+                estimated = estimate_size(sample, replace(self.settings, resize_mode=ResizeMode.NONE), source)
+                estimated *= (output_size[0] * output_size[1]) / max(1, sample.width * sample.height)
+                self.estimated.emit(key, estimated)
+                results.append((key, estimated))
+            except Exception:  # noqa: BLE001
+                self.failed.emit(key)
+                results.append((key, None))
+        self.completed.emit(results)

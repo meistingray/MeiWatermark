@@ -9,6 +9,7 @@ from PySide6.QtCore import QEvent, QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QDrag, QDragEnterEvent, QDropEvent, QIcon, QImage, QIntValidator, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QButtonGroup,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -28,10 +29,12 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QRadioButton,
     QSizePolicy,
     QSlider,
     QSplitter,
     QStyle,
+    QStyleFactory,
     QStyledItemDelegate,
     QStyleOptionViewItem,
     QToolButton,
@@ -39,7 +42,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .export import ExportWorker
+from .export import EstimateWorker, ExportWorker
 from .i18n import translate
 from .model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
 from .presets import (
@@ -48,7 +51,7 @@ from .presets import (
     preset_directory,
     save_preset,
 )
-from .render import FontChoice, estimate_size, export_size, load_thumbnail, load_preview, render, system_fonts
+from .render import FontChoice, load_thumbnail, load_preview, render, scaled_layers, system_fonts
 
 
 ACCENT = "#A40B5E"
@@ -68,6 +71,23 @@ def pen_icon() -> QIcon:
     painter.drawLine(7, 14, 17, 4)
     painter.setPen(QPen(QColor("#5b0635"), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
     painter.drawLine(5, 16, 8, 13)
+    painter.end()
+    return QIcon(pixmap)
+
+
+def trash_icon() -> QIcon:
+    pixmap = QPixmap(24, 24)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(QPen(QColor(ACCENT), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+    painter.drawLine(7, 5, 17, 5)
+    painter.drawLine(10, 3, 14, 3)
+    painter.drawLine(9, 7, 10, 15)
+    painter.drawLine(15, 7, 14, 15)
+    painter.drawLine(10, 15, 14, 15)
+    painter.drawLine(11, 8, 11, 13)
+    painter.drawLine(13, 8, 13, 13)
     painter.end()
     return QIcon(pixmap)
 
@@ -96,7 +116,7 @@ class LayerList(QListWidget):
 
 
 class LayerRow(QWidget):
-    def __init__(self, owner: LayerList, item: QListWidgetItem, layer: WatermarkLayer, edit, name_text: str, edit_tooltip: str) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, owner: LayerList, item: QListWidgetItem, layer: WatermarkLayer, edit, remove, name_text: str, edit_tooltip: str, remove_tooltip: str) -> None:  # type: ignore[no-untyped-def]
         super().__init__()
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.owner, self.item, self.drag_start = owner, item, None
@@ -108,7 +128,7 @@ class LayerRow(QWidget):
         name.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(name)
         layout.addStretch()
-        if layer.kind is LayerKind.TEXT:
+        if layer.kind is LayerKind.TEXT or layer.tiled:
             button = QToolButton()
             button.setObjectName("editLayer")
             button.setIcon(pen_icon())
@@ -121,8 +141,19 @@ class LayerRow(QWidget):
             button.clicked.connect(edit)
             layout.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
         drag = QLabel("⠿")
+        drag.setObjectName("dragLayer")
         drag.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(drag, 0, Qt.AlignmentFlag.AlignVCenter)
+        button = QToolButton()
+        button.setObjectName("deleteLayer")
+        button.setIcon(trash_icon())
+        button.setIconSize(QSize(20, 20))
+        button.setFixedSize(28, 28)
+        button.setAutoRaise(True)
+        button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        button.setToolTip(remove_tooltip)
+        button.clicked.connect(remove)
+        layout.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
 
     def mousePressEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         self.owner.setCurrentItem(self.item)
@@ -139,6 +170,13 @@ class LayerRow(QWidget):
 
 
 class ThumbnailDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index) -> None:  # type: ignore[no-untyped-def]
+        clean_option = QStyleOptionViewItem(option)
+        clean_option.state &= ~QStyle.StateFlag.State_HasFocus
+        super().paint(painter, clean_option, index)
+
+
+class LayerDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index) -> None:  # type: ignore[no-untyped-def]
         clean_option = QStyleOptionViewItem(option)
         clean_option.state &= ~QStyle.StateFlag.State_HasFocus
@@ -182,6 +220,13 @@ class MainWindow(QMainWindow):
         self.source = None
         self.settings = ExportSettings()
         self.worker: ExportWorker | None = None
+        self.estimate_worker: EstimateWorker | None = None
+        self._estimate_active_keys: set[tuple] = set()
+        self._estimate_cache: dict[tuple, float | None] = {}
+        self._estimate_pending: str | None = None
+        self._batch_estimate_total: float | None = None
+        self._batch_estimate_context: tuple | None = None
+        self._batch_estimate_keys: list[tuple] = []
         self.font_loaders: list[FontLoader] = []
         self._loading_controls = False
         self.preview_timer = QTimer(self)
@@ -267,6 +312,9 @@ class MainWindow(QMainWindow):
         text_button = QPushButton(self.t("添加文字水印"))
         text_button.clicked.connect(self.add_text_layer)
         row.addWidget(text_button)
+        tiled_button = QPushButton(self.t("添加全屏水印"))
+        tiled_button.clicked.connect(self.add_tiled_layer)
+        row.addWidget(tiled_button)
         row.addStretch()
         self.preset = QComboBox()
         self.preset.addItem(self.t("预设"))
@@ -299,8 +347,9 @@ class MainWindow(QMainWindow):
         self.layer_list = LayerList()
         self.layer_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.layer_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.layer_list.setItemDelegate(LayerDelegate(self.layer_list))
         self.layer_list.currentItemChanged.connect(lambda *_: self.load_layer_controls())
-        self.layer_list.itemDoubleClicked.connect(self.edit_text_layer)
+        self.layer_list.itemDoubleClicked.connect(self.edit_layer)
         self.layer_list.itemChanged.connect(self.update_layer_visibility)
         self.layer_list.model().rowsMoved.connect(lambda *_: self.sync_layer_order())
         layout.addWidget(self.layer_list, 1)
@@ -314,15 +363,18 @@ class MainWindow(QMainWindow):
         self.size_value, self.size_unit = self._number_unit(24, [self.t("百分比"), "px"])
         properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 0, 100000), self.size_unit))
         self.horizontal_value, self.horizontal_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
-        properties.addWidget(self._property_row(self.t("水平内嵌"), self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit))
+        self.horizontal_row = self._property_row(self.t("水平内嵌"), self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit)
+        properties.addWidget(self.horizontal_row)
         self.vertical_value, self.vertical_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
-        properties.addWidget(self._property_row(self.t("垂直内嵌"), self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit))
+        self.vertical_row = self._property_row(self.t("垂直内嵌"), self._stepper(self.vertical_value, -100000, 100000), self.vertical_unit)
+        properties.addWidget(self.vertical_row)
         self.opacity, self.opacity_number = self._slider_editor(0, 100, 80, 80)
         properties.addWidget(self._property_row(self.t("透明度"), self._slider_widget(self.opacity, self.opacity_number)))
         self.rotation, self.rotation_number = self._slider_editor(-180, 180, 0)
         properties.addWidget(self._property_row(self.t("旋转"), self._slider_widget(self.rotation, self.rotation_number)))
         layout.addWidget(controls)
-        layout.addWidget(self._heading(self.t("九宫格定位")))
+        self.anchor_heading = self._heading(self.t("九宫格定位"))
+        layout.addWidget(self.anchor_heading)
         grid_widget = QWidget()
         grid_widget.setObjectName("anchorGrid")
         self.anchor_buttons = []
@@ -339,6 +391,7 @@ class MainWindow(QMainWindow):
             button.clicked.connect(lambda checked, value=anchor: self.set_anchor(value))
             self.anchor_buttons.append(button)
             grid.addWidget(button, index // 3, index % 3)
+        self.anchor_grid = grid_widget
         layout.addWidget(grid_widget)
         for widget in (self.size_value, self.size_unit, self.horizontal_value, self.horizontal_unit, self.vertical_value, self.vertical_unit):
             if isinstance(widget, QComboBox):
@@ -439,7 +492,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._line())
         layout.addWidget(self._heading(self.t("预计文件大小")))
         self.current_estimate = QLabel(self.t("当前照片约 —"))
-        self.batch_estimate = QLabel(self.t("本批次约 —"))
+        self.batch_estimate = QToolButton()
+        self.batch_estimate.setObjectName("batchEstimate")
+        self.batch_estimate.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.batch_estimate.setText(self.t("本批次约 —"))
+        self.batch_estimate.setToolTip(self.t("点击估算本批次文件大小"))
+        self.batch_estimate.clicked.connect(self.estimate_batch)
         layout.addWidget(self.current_estimate)
         layout.addWidget(self.batch_estimate)
         self.export_button = QPushButton(self.t("导出"))
@@ -556,8 +614,14 @@ class MainWindow(QMainWindow):
             QMenuBar::item:selected {{ background: #eceef2; }}
             QPushButton, QComboBox, QLineEdit {{ min-height: 24px; border: 1px solid #d7dbe1; border-radius: 2px; padding: 1px 7px; background: #fff; }}
             QPushButton:hover, QComboBox:hover {{ border-color: {ACCENT}; }}
+            QComboBox:on {{ border-color: {ACCENT}; background: #fff; }}
             QComboBox::drop-down {{ width: 18px; border: none; background: transparent; }}
+            QComboBox::drop-down:on {{ width: 18px; border: none; background: transparent; }}
             QComboBox::down-arrow {{ image: url("{arrow}"); width: 8px; height: 5px; }}
+            QComboBox::down-arrow:on {{ image: url("{arrow}"); width: 8px; height: 5px; }}
+            QComboBox QAbstractItemView {{ background: #fff; border: 1px solid #d7dbe1; color: #202124; outline: 0; selection-background-color: #f5dce9; selection-color: #202124; }}
+            QComboBox QAbstractItemView::item {{ background: #fff; padding: 2px 7px; }}
+            QComboBox QAbstractItemView::item:selected {{ background: #f5dce9; color: #202124; }}
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
             QPushButton#presetSave {{ color: {ACCENT}; border-color: {ACCENT}; font-weight: 600; }}
             QLabel#heading {{ font-size: 10pt; font-weight: 600; margin: 2px 0; }}
@@ -570,8 +634,10 @@ class MainWindow(QMainWindow):
             QListWidget::item:selected:active, QListWidget::item:selected:!active {{ color: #202124; }}
             QListWidget::item:focus {{ outline: none; }}
             QToolButton:checked {{ color: {ACCENT}; }}
-            QToolButton#editLayer {{ border: none; background: transparent; padding: 0; }}
+            QToolButton#editLayer, QToolButton#deleteLayer {{ border: none; background: transparent; padding: 0 0 4px 0; }}
             QToolButton#editLayer:hover {{ background: #f5dce9; border-radius: 4px; }}
+            QToolButton#deleteLayer:hover, QToolButton#deleteLayer:pressed {{ background: transparent; }}
+            QLabel#dragLayer {{ color: {ACCENT}; }}
             QToolButton#step {{ min-width: 20px; border: 1px solid #d7dbe1; border-radius: 2px; background: #fff; font-weight: 600; }}
             QToolButton#step:hover {{ border-color: {ACCENT}; color: {ACCENT}; }}
             QToolButton#anchor {{ border: none; background: transparent; border-radius: 17px; font-size: 16pt; color: #7b818a; }}
@@ -585,6 +651,8 @@ class MainWindow(QMainWindow):
             QSlider::sub-page:horizontal {{ background: {ACCENT}; }}
             QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background: {ACCENT}; }}
             QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
+            QToolButton#batchEstimate {{ border: none; background: transparent; padding: 0; text-align: left; }}
+            QToolButton#batchEstimate:hover {{ color: {ACCENT}; }}
         """)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
@@ -605,6 +673,7 @@ class MainWindow(QMainWindow):
         if not added:
             return
         self.paths.extend(added)
+        self._clear_batch_estimate()
         last_item = None
         for path in added:
             item = QListWidgetItem(display_image_name(path))
@@ -638,6 +707,7 @@ class MainWindow(QMainWindow):
             return
         item = self.thumbnails.takeItem(row)
         self.paths.remove(item.data(Qt.ItemDataRole.UserRole))
+        self._clear_batch_estimate()
         if self.thumbnails.count():
             self.thumbnails.setCurrentRow(min(row, self.thumbnails.count() - 1))
         else:
@@ -655,6 +725,7 @@ class MainWindow(QMainWindow):
 
     def clear_photo_list(self) -> None:
         self.paths.clear()
+        self._clear_batch_estimate()
         self.thumbnails.clear()
         self.source = None
         self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
@@ -681,6 +752,11 @@ class MainWindow(QMainWindow):
         if self.edit_text_dialog(layer):
             self.add_layer(layer)
 
+    def add_tiled_layer(self) -> None:
+        layer = WatermarkLayer(LayerKind.TEXT, "全屏文字", text="MeiStingray", size=12, opacity=15, rotation=-30, tiled=True)
+        if self.edit_tiled_dialog(layer, select_mode=False):
+            self.add_layer(layer)
+
     def add_layer(self, layer: WatermarkLayer) -> None:
         self.layers.append(layer)
         item = QListWidgetItem()
@@ -689,23 +765,163 @@ class MainWindow(QMainWindow):
         item.setCheckState(Qt.CheckState.Checked if layer.visible else Qt.CheckState.Unchecked)
         item.setSizeHint(QSize(0, 28))
         self.layer_list.addItem(item)
-        layer_label = layer.text if layer.kind is LayerKind.TEXT else self.t(layer.name)
-        self.layer_list.setItemWidget(item, LayerRow(self.layer_list, item, layer, lambda: self.edit_text_layer(item), layer_label, self.t("编辑文字水印")))
+        self.layer_list.setItemWidget(item, LayerRow(self.layer_list, item, layer, lambda: self.edit_layer(item), lambda: self.remove_layer(item), self._layer_label(layer), self.t("编辑全屏水印") if layer.tiled else self.t("编辑文字水印"), self.t("删除图层")))
         self.layer_list.setCurrentItem(item)
         self.schedule_preview()
         self.schedule_estimate()
 
-    def edit_text_layer(self, item: QListWidgetItem) -> None:
+    def remove_layer(self, item: QListWidgetItem) -> None:
+        row = self.layer_list.row(item)
+        if row < 0:
+            return
+        layer_id = item.data(Qt.ItemDataRole.UserRole)
+        self.layer_list.takeItem(row)
+        self.layers = [layer for layer in self.layers if layer.id != layer_id]
+        if self.layer_list.count():
+            self.layer_list.setCurrentRow(min(row, self.layer_list.count() - 1))
+        self.schedule_preview()
+        self.schedule_estimate()
+
+    def _layer_label(self, layer: WatermarkLayer) -> str:
+        if layer.tiled:
+            content = layer.text if layer.kind is LayerKind.TEXT else Path(layer.image_path or "").name
+            return f"{self.t(layer.name)}：{content}"
+        return layer.text if layer.kind is LayerKind.TEXT else self.t(layer.name)
+
+    def _refresh_layer_label(self, item: QListWidgetItem, layer: WatermarkLayer) -> None:
+        row = self.layer_list.itemWidget(item)
+        if isinstance(row, LayerRow):
+            row.name_label.setText(self._layer_label(layer))
+
+    def edit_layer(self, item: QListWidgetItem) -> None:
         layer_id = item.data(Qt.ItemDataRole.UserRole)
         layer = next((candidate for candidate in self.layers if candidate.id == layer_id), None)
-        if layer is None or layer.kind is not LayerKind.TEXT:
+        if layer is None:
             return
-        if self.edit_text_dialog(layer):
-            row = self.layer_list.itemWidget(item)
-            if isinstance(row, LayerRow):
-                row.name_label.setText(layer.text)
+        changed = self.edit_tiled_dialog(layer) if layer.tiled else self.edit_text_dialog(layer) if layer.kind is LayerKind.TEXT else False
+        if changed:
+            self._refresh_layer_label(item, layer)
             self.schedule_preview()
             self.schedule_estimate()
+
+    def edit_text_layer(self, item: QListWidgetItem) -> None:
+        self.edit_layer(item)
+
+    def edit_tiled_dialog(self, layer: WatermarkLayer, select_mode: bool = True) -> bool:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.t("全屏水印"))
+        dialog.setMinimumWidth(420)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        grid.setColumnMinimumWidth(0, 22)
+        grid.setColumnStretch(3, 1)
+        image_mode = QRadioButton()
+        text_mode = QRadioButton()
+        modes = QButtonGroup(dialog)
+        radio_style = QStyleFactory.create("Fusion")
+        if radio_style is not None:
+            radio_style.setParent(dialog)
+        for button, name in ((image_mode, "tileImageMode"), (text_mode, "tileTextMode")):
+            button.setObjectName(name)
+            modes.addButton(button)
+            if radio_style is not None:
+                button.setStyle(radio_style)
+            button.setFixedSize(22, 26)
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        selected_kind = [layer.kind if select_mode else None]
+        image_button = QPushButton(self.t("选择图片"))
+        image_button.setObjectName("tileImage")
+        image_name = QLabel(Path(layer.image_path).name if layer.image_path else self.t("未选择"))
+        image_name.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        text_button = QPushButton(self.t("编辑文字"))
+        text_button.setObjectName("tileText")
+        text_name = QLabel(layer.text)
+        text_name.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        image_label = QLabel(self.t("使用图片"))
+        image_label.setObjectName("tileImageLabel")
+        text_label = QLabel(self.t("使用文字"))
+        text_label.setObjectName("tileTextLabel")
+        grid.addWidget(image_mode, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(image_label, 0, 1)
+        grid.addWidget(image_button, 0, 2)
+        grid.addWidget(image_name, 0, 3)
+        grid.addWidget(text_mode, 1, 0, Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(text_label, 1, 1)
+        grid.addWidget(text_button, 1, 2)
+        grid.addWidget(text_name, 1, 3)
+
+        def select(kind: LayerKind) -> None:
+            selected_kind[0] = kind
+            for button, selected in ((image_mode, kind is LayerKind.IMAGE), (text_mode, kind is LayerKind.TEXT)):
+                button.setChecked(selected)
+
+        def choose_image() -> None:
+            path, _ = QFileDialog.getOpenFileName(dialog, self.t("选择图片"), "", IMAGE_FILTER)
+            if path:
+                layer.image_path = path
+                image_name.setText(Path(path).name)
+                select(LayerKind.IMAGE)
+
+        def edit_text() -> None:
+            select(LayerKind.TEXT)
+            if self.edit_text_dialog(layer):
+                text_name.setText(layer.text)
+
+        image_mode.clicked.connect(lambda: select(LayerKind.IMAGE))
+        text_mode.clicked.connect(lambda: select(LayerKind.TEXT))
+        image_button.clicked.connect(choose_image)
+        text_button.clicked.connect(edit_text)
+        if selected_kind[0] is not None:
+            select(selected_kind[0])
+        gap = QLineEdit(str(round(layer.tile_gap)))
+        gap.setObjectName("tileGap")
+        gap.setValidator(QIntValidator(0, 100000, dialog))
+        gap.setFixedWidth(58)
+        gap_editor = QWidget()
+        gap_layout = QHBoxLayout(gap_editor)
+        gap_layout.setContentsMargins(0, 0, 0, 0)
+        gap_layout.setSpacing(5)
+        gap_layout.addWidget(gap)
+        gap_layout.addWidget(QLabel("%"))
+        gap_label = QLabel(self.t("间距"))
+        gap_label.setObjectName("tileGapLabel")
+        grid.addWidget(gap_label, 2, 1)
+        grid.addWidget(gap_editor, 2, 2)
+        stagger = QCheckBox()
+        stagger.setObjectName("tileStagger")
+        stagger.setFixedSize(22, 26)
+        stagger.setChecked(layer.tile_stagger)
+        grid.addWidget(stagger, 3, 0, Qt.AlignmentFlag.AlignCenter)
+        stagger_label = QLabel(self.t("错列"))
+        stagger_label.setObjectName("tileStaggerLabel")
+        grid.addWidget(stagger_label, 3, 1)
+        layout.addLayout(grid)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        def accept() -> None:
+            if selected_kind[0] is None:
+                QMessageBox.warning(dialog, self.t("全屏水印"), self.t("请选择图片或文字"))
+                return
+            if selected_kind[0] is LayerKind.IMAGE and not layer.image_path:
+                QMessageBox.warning(dialog, self.t("全屏水印"), self.t("请选择图片"))
+                return
+            dialog.accept()
+
+        buttons.accepted.connect(accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return False
+        layer.kind = selected_kind[0]
+        layer.name = "全屏图片" if layer.kind is LayerKind.IMAGE else "全屏文字"
+        layer.tiled = True
+        layer.tile_gap = self._number(gap)
+        layer.tile_stagger = stagger.isChecked()
+        return True
 
     def edit_text_dialog(self, layer: WatermarkLayer) -> bool:
         dialog = QDialog(self)
@@ -825,7 +1041,7 @@ class MainWindow(QMainWindow):
             return
         self._loading_controls = True
         self.size_value.setText(str(round(layer.size)))
-        self.size_unit.setCurrentIndex(1 if layer.size_unit is Unit.PIXELS else 0)
+        self.size_unit.setCurrentIndex(0 if layer.size_unit is Unit.PERCENT else 1)
         self.opacity.setValue(layer.opacity)
         self.opacity_number.setText(str(layer.opacity))
         self.horizontal_value.setText(str(round(layer.horizontal_inset)))
@@ -835,6 +1051,10 @@ class MainWindow(QMainWindow):
         self.rotation.setValue(round(layer.rotation))
         self.rotation_number.setText(str(round(layer.rotation)))
         self._show_anchor(layer.anchor)
+        self.horizontal_row.setEnabled(not layer.tiled)
+        self.vertical_row.setEnabled(not layer.tiled)
+        self.anchor_heading.setEnabled(not layer.tiled)
+        self.anchor_grid.setEnabled(not layer.tiled)
         self._loading_controls = False
 
     def store_layer_controls(self) -> None:
@@ -844,7 +1064,7 @@ class MainWindow(QMainWindow):
         if layer is None:
             return
         layer.size = self._number(self.size_value)
-        layer.size_unit = Unit.PIXELS if self.size_unit.currentIndex() == 1 else Unit.PERCENT
+        layer.size_unit = (Unit.PERCENT, Unit.PIXELS)[self.size_unit.currentIndex()]
         self.opacity_number.setText(str(self.opacity.value()))
         layer.opacity = self.opacity.value()
         layer.horizontal_inset = self._number(self.horizontal_value)
@@ -885,6 +1105,12 @@ class MainWindow(QMainWindow):
         self.preview_timer.start(30)
 
     def schedule_estimate(self) -> None:
+        self._refresh_estimate_labels()
+        if self.source is None:
+            return
+        selected = self._selected_path()
+        if selected is None or self._estimate_key(selected) in self._estimate_cache:
+            return
         self.estimate_timer.start(1000)
 
     def resizeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
@@ -901,21 +1127,10 @@ class MainWindow(QMainWindow):
         preview_size = (max(1, round(source_w * scale)), max(1, round(source_h * scale)))
         preview_size = min(preview_size[0], self.source.image.width), min(preview_size[1], self.source.image.height)
         base = self.source.image.resize(preview_size, Image.Resampling.LANCZOS)
-        preview_layers = self._scaled_layers(preview_size[0] / source_w)
+        preview_layers = scaled_layers(self.layers, preview_size[0] / source_w)
         rendered = render(base, preview_layers)
         pixmap = self._pixmap(rendered)
         self.preview.setPixmap(pixmap.scaled(self.preview.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-
-    def _scaled_layers(self, scale: float) -> list[WatermarkLayer]:
-        return [
-            replace(
-                layer,
-                size=layer.size * scale if layer.size_unit is Unit.PIXELS else layer.size,
-                horizontal_inset=layer.horizontal_inset * scale if layer.horizontal_unit is Unit.PIXELS else layer.horizontal_inset,
-                vertical_inset=layer.vertical_inset * scale if layer.vertical_unit is Unit.PIXELS else layer.vertical_inset,
-            )
-            for layer in self.layers
-        ]
 
     def _pixmap(self, image: Image.Image) -> QPixmap:
         rgba = image.convert("RGBA")
@@ -948,18 +1163,101 @@ class MainWindow(QMainWindow):
     def update_estimate(self) -> None:
         if self.source is None:
             return
+        selected = self._selected_path()
+        if selected is None:
+            return
+        key = self._estimate_key(selected)
+        if key in self._estimate_cache or key in self._estimate_active_keys:
+            return
+        self._start_estimate([(key, selected, self.source)], "current")
+
+    def estimate_batch(self) -> None:
+        if not self.paths:
+            return
+        context = self._estimate_context()
+        keys = [self._estimate_key(path) for path in self.paths]
+        self._batch_estimate_context = context
+        self._batch_estimate_keys = keys
+        missing = [
+            (key, path, self.source if path == self._selected_path() else None)
+            for key, path in zip(keys, self.paths)
+            if key not in self._estimate_cache
+        ]
+        if not missing:
+            self._finish_batch_estimate()
+            return
+        self._start_estimate(missing, "batch")
+
+    def _start_estimate(self, tasks: list[tuple[tuple, Path, object]], request: str) -> None:
+        if self.estimate_worker is not None and self.estimate_worker.isRunning():
+            self.estimate_worker.cancel()
+            self._estimate_pending = request
+            return
+        worker = EstimateWorker(tasks, deepcopy(self.layers), replace(self.settings))
+        self.estimate_worker = worker
+        self._estimate_active_keys = {key for key, _, _ in tasks}
+        worker.completed.connect(self._store_estimates)
+        worker.finished.connect(lambda current=worker: self._estimate_finished(current))
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+
+    def _estimate_key(self, path: Path) -> tuple:
         try:
-            source_size = self.source.original_size
-            sample = render(self.source.image, self._scaled_layers(self.source.image.width / source_size[0]))
-            output_size = export_size(source_size, self.settings)
-            estimated = estimate_size(sample, replace(self.settings, resize_mode=ResizeMode.NONE), self.source)
-            estimated *= (output_size[0] * output_size[1]) / max(1, sample.width * sample.height)
-            current = self._bytes(estimated)
-            self.current_estimate.setText(self.t("当前照片约 {size}").format(size=current))
-            total = estimated * len(self.paths)
+            resolved = path.resolve()
+            stat = resolved.stat()
+            source = str(resolved), stat.st_mtime_ns, stat.st_size
+        except OSError:
+            source = str(path), 0, 0
+        settings = self.settings
+        export = settings.format, settings.quality, settings.resize_mode, settings.resize_value, settings.allow_upscale, settings.keep_exif, settings.keep_icc
+        return source, export, tuple(repr(layer) for layer in self.layers)
+
+    def _selected_path(self) -> Path | None:
+        item = self.thumbnails.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+
+    def _estimate_context(self) -> tuple:
+        settings = self.settings
+        return (
+            settings.format, settings.quality, settings.resize_mode, settings.resize_value,
+            settings.allow_upscale, settings.keep_exif, settings.keep_icc, tuple(repr(layer) for layer in self.layers),
+        )
+
+    def _store_estimates(self, results: list[tuple[tuple, float | None]]) -> None:
+        self._estimate_cache.update(results)
+        self._refresh_estimate_labels()
+
+    def _refresh_estimate_labels(self) -> None:
+        selected = self._selected_path()
+        current = self._estimate_cache.get(self._estimate_key(selected)) if selected is not None else None
+        self.current_estimate.setText(self.t("当前照片约 {size}").format(size=self._bytes(current)) if current is not None else self.t("当前照片约 —"))
+        if self._batch_estimate_total is not None and self._batch_estimate_context == self._estimate_context():
+            total = self._batch_estimate_total
             self.batch_estimate.setText(self.t("本批次约 {minimum}–{maximum}").format(minimum=self._bytes(total * 0.85), maximum=self._bytes(total * 1.15)))
-        except Exception:  # noqa: BLE001
-            self.current_estimate.setText(self.t("当前照片约 —"))
+        else:
+            self.batch_estimate.setText(self.t("本批次约 —"))
+
+    def _estimate_finished(self, worker: EstimateWorker) -> None:
+        if self.estimate_worker is not worker:
+            return
+        self.estimate_worker = None
+        self._estimate_active_keys.clear()
+        if self._batch_estimate_context == self._estimate_context() and self._batch_estimate_keys:
+            self._finish_batch_estimate()
+        self._refresh_estimate_labels()
+        if self._estimate_pending:
+            pending, self._estimate_pending = self._estimate_pending, None
+            (self.estimate_batch if pending == "batch" else self.update_estimate)()
+
+    def _finish_batch_estimate(self) -> None:
+        values = [self._estimate_cache.get(key) for key in self._batch_estimate_keys]
+        self._batch_estimate_total = sum(value for value in values if value is not None) if values and all(value is not None for value in values) else None
+        self._refresh_estimate_labels()
+
+    def _clear_batch_estimate(self) -> None:
+        self._batch_estimate_total = None
+        self._batch_estimate_context = None
+        self._batch_estimate_keys = []
 
     @staticmethod
     def _bytes(value: float) -> str:

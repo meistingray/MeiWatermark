@@ -17,9 +17,10 @@ Exporta lotes en JPEG, PNG y WebP con control de calidad, restricciones de tama�
 ## Funciones
 
 - **Marcas de agua multicapa**: combine varias capas de imagen y texto; active, ordene y arrastre las capas.
-- **Resultado visual coherente**: defina el tamaño en porcentaje o píxeles; en las marcas de texto, el tamaño corresponde al lado mayor del texto renderizado, no al tamaño de fuente.
+- **Resultado visual coherente**: defina el tamaño por porcentaje de ancho, alto, lado corto o píxeles; en las marcas de texto, el tamaño corresponde al lado mayor del texto renderizado, no al tamaño de fuente.
 - **Posicionamiento preciso**: controle el anclaje de nueve puntos, los márgenes horizontal y vertical, la opacidad y la rotación. Los márgenes pueden ser negativos.
 - **Marcas de texto**: use la lista de fuentes del sistema con nombres localizados; configure por separado el color del texto y del contorno, incluso sin color, y el grosor del contorno.
+- **Marcas en mosaico**: cree marcas repetidas de texto o imagen en toda la foto, con espacio en porcentaje del lado corto y disposición alternada.
 - **Vista previa en tiempo real**: revise el resultado mientras trabaja; importe imágenes arrastrándolas a cualquier zona de la ventana y la última imagen añadida se seleccionará y mostrará automáticamente.
 - **Gestión de fotos**: use `Delete`, el menú contextual o **Vaciar lista** para quitar fotos de la lista actual. Los archivos originales nunca se eliminan.
 - **Exportación por lotes**: JPEG, PNG y WebP; calidad predeterminada de 100 y límites opcionales por lado largo, lado corto o escala.
@@ -31,18 +32,20 @@ Exporta lotes en JPEG, PNG y WebP con control de calidad, restricciones de tama�
 ## Uso rápido
 
 1. Seleccione **Abrir** o arrastre una o varias imágenes a cualquier zona de la ventana.
-2. Añada una marca de agua de imagen o texto y ordene las capas en la lista.
+2. Añada una marca de imagen, texto o mosaico y ordene las capas en la lista.
 3. Seleccione una capa y ajuste tamaño, margen, opacidad, rotación y anclaje de nueve puntos.
 4. Elija formato, calidad, límite opcional de tamaño y destino de salida.
 5. Seleccione **Exportar** para procesar el lote.
 
 ## Escala y posicionamiento
 
-La **Proporción visual** basa el margen en el lado corto de la imagen, para conservar márgenes percibidos similares en imágenes horizontales y verticales. **Porcentaje** usa el ancho o alto correspondiente; **px** está pensado para requisitos de píxeles fijos.
+La **Proporción visual** basa el margen en el lado corto de la imagen, para conservar márgenes percibidos similares en imágenes horizontales y verticales. El **Porcentaje** de los márgenes usa el ancho o alto correspondiente; **px** está pensado para requisitos de píxeles fijos.
 
-El porcentaje del tamaño de la marca usa el lado corto de la foto como referencia. En las marcas de texto, controla el lado mayor del texto renderizado completo, de modo que una frase más larga conserve la proporción visual prevista.
+Para el tamaño de la marca, **%** usa el lado corto de la imagen. En las marcas de texto, controla el lado mayor del texto renderizado completo, de modo que una frase más larga conserve la proporción visual prevista.
 
-Para la mayoría de trabajos fotográficos, use **Porcentaje** para el tamaño de la marca de agua y **Proporción visual** para los márgenes. Elija primero el anclaje con la cuadrícula de nueve puntos y después ajuste los márgenes.
+Para la mayoría de trabajos fotográficos, use **%** para el tamaño de la marca de agua y **Proporción visual** para los márgenes.
+
+Las marcas en mosaico usan los mismos controles de tamaño, opacidad y rotación, pero se repiten en toda la imagen. Su espacio usa el porcentaje del lado corto; no usan márgenes ni anclaje de nueve puntos.
 
 ## Preajustes y rutas de salida
 

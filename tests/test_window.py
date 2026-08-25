@@ -5,15 +5,15 @@ import unittest
 from unittest.mock import patch
 
 from PIL import Image
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QEventLoop, QPoint, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QCheckBox, QDialog, QLabel, QPushButton, QRadioButton, QToolButton
 
 from meiwatermark.model import ExportSettings, LayerKind, ResizeMode, WatermarkLayer
 from meiwatermark.presets import save_preset
 from meiwatermark.i18n import translate
-from meiwatermark.window import LayerList, MainWindow, ThumbnailDelegate, display_image_name
+from meiwatermark.window import LayerDelegate, LayerList, MainWindow, ThumbnailDelegate, display_image_name
 
 
 class WindowTests(unittest.TestCase):
@@ -27,6 +27,63 @@ class WindowTests(unittest.TestCase):
     def test_thumbnail_selection_has_no_native_focus_outline(self) -> None:
         window = MainWindow()
         self.assertIsInstance(window.thumbnails.itemDelegate(), ThumbnailDelegate)
+        self.assertIsInstance(window.layer_list.itemDelegate(), LayerDelegate)
+        window.close()
+
+    def test_layer_delete_button_removes_its_layer(self) -> None:
+        window = MainWindow()
+        first, second = WatermarkLayer(LayerKind.TEXT, "text", text="First"), WatermarkLayer(LayerKind.TEXT, "text", text="Second")
+        window.add_layer(first)
+        window.add_layer(second)
+        row = window.layer_list.itemWidget(window.layer_list.item(1))
+        button = row.findChild(QToolButton, "deleteLayer")
+        self.assertIsNotNone(button)
+        button.click()
+        self.assertEqual([layer.id for layer in window.layers], [first.id])
+        self.assertEqual(window.layer_list.count(), 1)
+        window.close()
+
+    def test_tiled_layer_has_an_editor_and_disables_position_controls(self) -> None:
+        window = MainWindow()
+        layer = WatermarkLayer(LayerKind.IMAGE, "全屏图片", image_path="logo.png", tiled=True)
+        window.add_layer(layer)
+        row = window.layer_list.itemWidget(window.layer_list.currentItem())
+        self.assertIsNotNone(row.findChild(QToolButton, "editLayer"))
+        self.assertFalse(window.horizontal_row.isEnabled())
+        self.assertFalse(window.vertical_row.isEnabled())
+        self.assertFalse(window.anchor_grid.isEnabled())
+        self.assertTrue(window.size_value.isEnabled())
+        self.assertTrue(window.opacity.isEnabled())
+        self.assertTrue(window.rotation.isEnabled())
+        window.close()
+
+    def test_tiled_dialog_selection_and_columns_are_stable(self) -> None:
+        window = MainWindow()
+        window.edit_text_dialog = lambda layer: True
+        state = {}
+
+        def inspect() -> None:
+            dialog = next(widget for widget in self.app.topLevelWidgets() if isinstance(widget, QDialog))
+            image_mode = dialog.findChild(QRadioButton, "tileImageMode")
+            text_mode = dialog.findChild(QRadioButton, "tileTextMode")
+            text_button = dialog.findChild(QPushButton, "tileText")
+            state["initial"] = (image_mode.isChecked(), text_mode.isChecked())
+            text_button.click()
+            state["selected"] = (image_mode.isChecked(), text_mode.isChecked())
+            state["selected_is_visible"] = image_mode.grab().toImage() != text_mode.grab().toImage()
+            state["buttons_enabled"] = dialog.findChild(QPushButton, "tileImage").isEnabled() and text_button.isEnabled()
+            state["indicator_x"] = (image_mode.x(), dialog.findChild(QCheckBox, "tileStagger").x())
+            state["label_x"] = tuple(dialog.findChild(QLabel, name).x() for name in ("tileImageLabel", "tileTextLabel", "tileGapLabel", "tileStaggerLabel"))
+            dialog.reject()
+
+        QTimer.singleShot(0, inspect)
+        window.edit_tiled_dialog(WatermarkLayer(LayerKind.TEXT, "全屏文字", tiled=True), select_mode=False)
+        self.assertEqual(state["initial"], (False, False))
+        self.assertEqual(state["selected"], (False, True))
+        self.assertTrue(state["selected_is_visible"])
+        self.assertTrue(state["buttons_enabled"])
+        self.assertEqual(len(set(state["indicator_x"])), 1)
+        self.assertEqual(len(set(state["label_x"])), 1)
         window.close()
 
     def test_layer_list_uses_the_row_mouse_position_for_drag_preview(self) -> None:
@@ -40,22 +97,54 @@ class WindowTests(unittest.TestCase):
     def test_combo_boxes_use_the_flat_arrow_style(self) -> None:
         window = MainWindow()
         self.assertIn("QComboBox::drop-down", window.styleSheet())
+        self.assertIn("QComboBox:on", window.styleSheet())
+        self.assertIn("QComboBox QAbstractItemView", window.styleSheet())
         self.assertIn("down-arrow.svg", window.styleSheet())
         self.assertIn("width: 18px", window.styleSheet())
         self.assertNotIn("padding-right: 26px", window.styleSheet())
         window.close()
+
+    def test_unchanged_estimate_is_not_scheduled_again(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "photo.png"
+            Image.new("RGB", (40, 30), "white").save(path)
+            window = MainWindow()
+            window.add_paths([path])
+            window.estimate_timer.stop()
+            window._estimate_cache[window._estimate_key(path)] = 1024
+            window.schedule_estimate()
+            self.assertFalse(window.estimate_timer.isActive())
+            window.layers.append(WatermarkLayer(LayerKind.TEXT, "text"))
+            window.schedule_estimate()
+            self.assertTrue(window.estimate_timer.isActive())
+            window.close()
+
+    def test_automatic_estimate_only_uses_the_current_photo(self) -> None:
+        with TemporaryDirectory() as directory, patch("meiwatermark.window.EstimateWorker") as worker_class:
+            first, second = Path(directory) / "first.png", Path(directory) / "second.png"
+            Image.new("RGB", (12, 12), "white").save(first)
+            Image.new("RGB", (12, 12), "black").save(second)
+            window = MainWindow()
+            window.add_paths([first, second])
+            window.estimate_timer.stop()
+            window.update_estimate()
+            self.assertEqual(len(worker_class.call_args.args[0]), 1)
+            self.assertEqual(worker_class.call_args.args[0][0][1], second)
+            window.close()
 
     def test_compact_unit_translations(self) -> None:
         self.assertEqual([translate("百分比", language) for language in ("zh", "en", "es", "ja")], ["%", "%", "%", "%"])
         self.assertEqual([translate("视觉比例", language) for language in ("zh", "en", "es", "ja")], ["比例", "Ratio", "Ratio", "比率"])
         self.assertEqual([translate("字重", language) for language in ("zh", "en", "es", "ja")], ["字重", "Weight", "Peso", "ウェイト"])
         self.assertEqual([translate("图片水印", language) for language in ("zh", "en", "es", "ja")], ["图片", "Image", "Imagen", "画像"])
+        self.assertEqual([translate("删除图层", language) for language in ("zh", "en", "es", "ja")], ["删除图层", "Delete Layer", "Eliminar capa", "レイヤーを削除"])
+        self.assertEqual([translate("添加全屏水印", language) for language in ("zh", "en", "es", "ja")], ["+全屏水印", "+ Tile", "+ Mosaico", "+全画面透かし"])
 
     def test_unit_choices_update_after_language_switch(self) -> None:
         window = MainWindow()
         for language, ratio in (("zh", "比例"), ("en", "Ratio"), ("es", "Ratio"), ("ja", "比率")):
             window.set_language(language)
-            self.assertEqual(window.size_unit.itemText(0), "%")
+            self.assertEqual((window.size_unit.itemText(0), window.size_unit.itemText(1)), ("%", "px"))
             self.assertEqual(window.horizontal_unit.itemText(0), ratio)
         window.close()
 
@@ -129,6 +218,43 @@ class WindowTests(unittest.TestCase):
             window.add_paths([first])
             window.add_paths([latest])
             self.assertEqual(window.thumbnails.currentItem().data(Qt.ItemDataRole.UserRole), latest)
+            window.close()
+
+    def test_switching_photo_changes_only_the_current_estimate(self) -> None:
+        with TemporaryDirectory() as directory:
+            first, second = Path(directory) / "first.png", Path(directory) / "second.png"
+            Image.new("RGB", (12, 12), "white").save(first)
+            Image.new("RGB", (12, 12), "black").save(second)
+            window = MainWindow()
+            window.add_paths([first, second])
+            window._estimate_cache[window._estimate_key(first)] = 1024 * 1024
+            window._estimate_cache[window._estimate_key(second)] = 2 * 1024 * 1024
+            window._refresh_estimate_labels()
+            batch = window.batch_estimate.text()
+            self.assertIn("2.0 MB", window.current_estimate.text())
+            window.thumbnails.setCurrentRow(0)
+            self.assertIn("1.0 MB", window.current_estimate.text())
+            self.assertEqual(window.batch_estimate.text(), batch)
+            window.close()
+
+    def test_completed_batch_estimate_stays_fixed_when_selection_changes(self) -> None:
+        with TemporaryDirectory() as directory:
+            first, second = Path(directory) / "first.png", Path(directory) / "second.png"
+            Image.new("RGB", (400, 300), "white").save(first)
+            Image.effect_noise((400, 300), 100).convert("RGB").save(second)
+            window = MainWindow()
+            window.add_paths([first, second])
+            window.estimate_timer.stop()
+            window.estimate_batch()
+            loop = QEventLoop()
+            window.estimate_worker.finished.connect(loop.quit)
+            QTimer.singleShot(5000, loop.quit)
+            loop.exec()
+            batch = window.batch_estimate.text()
+            current = window.current_estimate.text()
+            window.thumbnails.setCurrentRow(0)
+            self.assertNotEqual(window.current_estimate.text(), current)
+            self.assertEqual(window.batch_estimate.text(), batch)
             window.close()
 
 

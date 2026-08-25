@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from io import BytesIO
 import json
@@ -66,6 +66,18 @@ def _size_pixels(layer: WatermarkLayer, width: int, height: int) -> int:
     if layer.size_unit is Unit.PIXELS:
         return max(1, round(layer.size))
     return max(1, round(min(width, height) * layer.size / 100))
+
+
+def scaled_layers(layers: list[WatermarkLayer], scale: float) -> list[WatermarkLayer]:
+    return [
+        replace(
+            layer,
+            size=layer.size * scale if layer.size_unit is Unit.PIXELS else layer.size,
+            horizontal_inset=layer.horizontal_inset * scale if layer.horizontal_unit is Unit.PIXELS else layer.horizontal_inset,
+            vertical_inset=layer.vertical_inset * scale if layer.vertical_unit is Unit.PIXELS else layer.vertical_inset,
+        )
+        for layer in layers
+    ]
 
 
 def _font(layer: WatermarkLayer, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -182,6 +194,7 @@ def _font_entries(path: Path) -> list[dict[str, object]]:
                 font.close()
 
 
+@lru_cache(maxsize=4)
 def system_fonts(language: str) -> list[FontChoice]:
     sources = _font_sources()
     fingerprint = [[str(path), path.stat().st_mtime_ns, path.stat().st_size] for path in sources]
@@ -237,17 +250,24 @@ def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
 
 
 @lru_cache(maxsize=16)
-def _watermark_image(path: str) -> Image.Image:
+def _watermark_image(path: str, modified: int) -> Image.Image:
     with Image.open(path) as opened:
         return ImageOps.exif_transpose(opened).convert("RGBA")
 
 
-def _image_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image | None:
-    if not layer.image_path or not Path(layer.image_path).is_file():
-        return None
-    stamp = _watermark_image(layer.image_path)
+@lru_cache(maxsize=16)
+def _resized_watermark(path: str, modified: int, target_size: int) -> Image.Image:
+    stamp = _watermark_image(path, modified)
     scale = target_size / max(stamp.width, stamp.height)
     return stamp.resize((max(1, round(stamp.width * scale)), max(1, round(stamp.height * scale))), Image.Resampling.LANCZOS)
+
+
+def _image_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image | None:
+    path = Path(layer.image_path or "")
+    if not layer.image_path or not path.is_file():
+        return None
+    path = path.resolve()
+    return _resized_watermark(str(path), path.stat().st_mtime_ns, target_size)
 
 
 def _apply_opacity(stamp: Image.Image, opacity: int) -> Image.Image:
@@ -278,6 +298,15 @@ def _position(layer: WatermarkLayer, base_size: tuple[int, int], stamp_size: tup
     return x, y
 
 
+def _tile(result: Image.Image, stamp: Image.Image, layer: WatermarkLayer) -> None:
+    gap = max(0, round(min(result.size) * layer.tile_gap / 100))
+    step_x, step_y = max(1, stamp.width + gap), max(1, stamp.height + gap)
+    for row, y in enumerate(range(-step_y, result.height + step_y, step_y)):
+        offset = step_x // 2 if layer.tile_stagger and row % 2 else 0
+        for x in range(-step_x + offset, result.width + step_x, step_x):
+            result.paste(stamp, (x, y), stamp)
+
+
 def render(base: Image.Image, layers: list[WatermarkLayer]) -> Image.Image:
     result = base.convert("RGBA").copy()
     # The first layer in the UI is visually the topmost layer.
@@ -291,6 +320,9 @@ def render(base: Image.Image, layers: list[WatermarkLayer]) -> Image.Image:
         stamp = _trim_transparent(_apply_opacity(stamp, layer.opacity))
         if layer.rotation:
             stamp = _trim_transparent(stamp.rotate(-layer.rotation, expand=True, resample=Image.Resampling.BICUBIC))
+        if layer.tiled:
+            _tile(result, stamp, layer)
+            continue
         position = _position(layer, result.size, stamp.size)
         if 0 <= position[0] <= result.width - stamp.width and 0 <= position[1] <= result.height - stamp.height:
             result.alpha_composite(stamp, position)

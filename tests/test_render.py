@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from PIL import Image
 
 from meiwatermark.model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
-from meiwatermark.render import _text_stamp, estimate_size, export_size, load_image, load_preview, load_thumbnail, render, resize_for_export, save_image, system_fonts
+from meiwatermark.render import _image_stamp, _resized_watermark, _size_pixels, _text_stamp, _watermark_image, estimate_size, export_size, load_image, load_preview, load_thumbnail, render, resize_for_export, save_image, system_fonts
 
 
 class RenderTests(unittest.TestCase):
@@ -16,6 +16,32 @@ class RenderTests(unittest.TestCase):
         layer = WatermarkLayer(LayerKind.TEXT, "text", text="X", size=10, horizontal_inset=10, horizontal_unit=Unit.VISUAL, vertical_inset=10, vertical_unit=Unit.VISUAL, anchor=Anchor.BOTTOM_RIGHT)
         result = render(base, [layer])
         self.assertEqual(result.size, base.size)
+
+    def test_size_percent_uses_the_short_image_edge(self) -> None:
+        width, height = 1000, 500
+        self.assertEqual(_size_pixels(WatermarkLayer(LayerKind.TEXT, "text", size=10, size_unit=Unit.PERCENT), width, height), 50)
+
+    def test_tiled_watermark_repeats_across_the_canvas(self) -> None:
+        base = Image.new("RGBA", (40, 40), "black")
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "red.png"
+            Image.new("RGBA", (8, 8), "red").save(path)
+            layer = WatermarkLayer(LayerKind.IMAGE, "tile", image_path=str(path), size=8, size_unit=Unit.PIXELS, opacity=100, tiled=True, tile_gap=0, tile_stagger=False)
+            result = render(base, [layer])
+        self.assertGreater(result.getpixel((0, 0))[0], 0)
+        self.assertGreater(result.getpixel((24, 24))[0], 0)
+
+    def test_image_stamp_reuses_the_resized_watermark(self) -> None:
+        _watermark_image.cache_clear()
+        _resized_watermark.cache_clear()
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "mark.png"
+            Image.new("RGBA", (800, 800), "red").save(path)
+            layer = WatermarkLayer(LayerKind.IMAGE, "mark", image_path=str(path))
+            first = _image_stamp(layer, 96)
+            second = _image_stamp(layer, 96)
+        self.assertIs(first, second)
+        self.assertEqual(_resized_watermark.cache_info().hits, 1)
 
     def test_resize_long_edge_keeps_ratio(self) -> None:
         image = Image.new("RGBA", (4000, 2000))

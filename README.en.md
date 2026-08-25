@@ -17,9 +17,10 @@ Batch export to JPEG, PNG, and WebP with quality control, resize constraints, fi
 ## Features
 
 - **Multi-layer watermarks**: combine multiple image and text watermark layers; enable, reorder, and drag layers as needed.
-- **Consistent visual results**: set watermark size in percent or pixels; text watermark size means the rendered text’s longest edge, so image and text layers share the same size semantics.
+- **Consistent visual results**: set watermark size by the image’s short-edge percent or pixels; text watermark size means the rendered text’s longest edge, so image and text layers share the same size semantics.
 - **Precise placement**: control nine-grid anchors, horizontal and vertical insets, opacity, and rotation independently. Insets can be negative.
 - **Text watermarks**: use the system font list with localized font names; set text and outline colors independently, including no color, and choose an outline width.
+- **Tiled watermarks**: create repeated full-image text or image watermarks, with short-edge percentage gaps and optional staggering.
 - **Live preview**: review the result as you work; drag images anywhere into the window, with the newest imported image selected and brought into view automatically.
 - **Photo list management**: use the Delete key, the context menu, or Clear List to remove photos from the current list. Original files are never deleted.
 - **Batch export**: JPEG, PNG, and WebP support; quality defaults to 100, with optional long-edge, short-edge, or scale-based resize limits.
@@ -31,18 +32,20 @@ Batch export to JPEG, PNG, and WebP with quality control, resize constraints, fi
 ## Quick Start
 
 1. Select **Open Images**, or drag one or more images anywhere into the window.
-2. Add an image watermark or a text watermark, then arrange and enable layers in the layer list.
+2. Add an image, text, or tiled watermark, then arrange and enable layers in the layer list.
 3. Select a layer and set its size, inset, opacity, rotation, and nine-grid anchor.
 4. Choose output format, quality, optional resize limit, and destination.
 5. Select **Export** to process the batch.
 
 ## Scale and Positioning
 
-**Visual Ratio** bases the inset on the image’s short edge, so landscape and portrait images keep similar perceived margins in full-screen viewing. **Percent** uses the relevant image width or height; **px** is intended for fixed-pixel requirements.
+**Visual Ratio** bases the inset on the image’s short edge, so landscape and portrait images keep similar perceived margins in full-screen viewing. Inset **Percent** uses the relevant image width or height; **px** is intended for fixed-pixel requirements.
 
-Watermark size percentages use the photo’s short edge as their reference. For text watermarks, the percentage controls the longest edge of the rendered text as a whole, not the font size, so longer text remains within the intended visual proportion.
+For watermark size, **%** uses the image’s short edge. For text watermarks, the selected ratio controls the longest edge of the rendered text as a whole, not the font size, so longer text remains within the intended visual proportion.
 
-For most photographic work, use **Percent** for watermark size and **Visual Ratio** for insets. Choose the anchor with the nine-grid, then fine-tune the two inset values for consistent placement across the batch.
+For most photographic work, use **%** for watermark size and **Visual Ratio** for insets.
+
+Tiled watermarks use the same size, opacity, and rotation controls, but repeat across the full image. Their gap uses the image’s short-edge percentage; tiled layers do not use insets or nine-grid positioning.
 
 ## Presets and Output Paths
 

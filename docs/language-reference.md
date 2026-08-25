@@ -5,8 +5,9 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 中文 | English | Español | 日本語 |
 | --- | --- | --- | --- |
 | 打开图片 | Open Images | Abrir | 画像を開く |
-| 添加图片水印 | Add Image Watermark | Imagen + | 画像透かしを追加 |
-| 添加文字水印 | Add Text Watermark | Texto + | テキスト透かしを追加 |
+| +图片水印 | + Image | + Imagen | +画像透かし |
+| +文字水印 | + Text | + Texto | +文字透かし |
+| +全屏水印 | + Tile | + Mosaico | +全画面透かし |
 | 预设 | Preset | Preajuste | プリセット |
 | 保存 | Save | Guardar | 保存 |
 | 管理 | Manage | Gestionar | 管理 |
@@ -17,9 +18,17 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 预设名称无效 | Invalid preset name | Nombre no válido | 無効なプリセット名 |
 | 水印图层 | Watermark Layers | Capas de marca de agua | 透かしレイヤー |
 | 图片 | Image | Imagen | 画像 |
+| 全屏图片 / 全屏文字 | Tiled Image / Tiled Text | Imagen en mosaico / Texto en mosaico | 全画面画像 / 全画面テキスト |
+| 使用图片 / 使用文字 | Use Image / Use Text | Usar imagen / Usar texto | 画像を使用 / 文字を使用 |
+| 选择图片 / 未选择 | Choose Image / Not selected | Elegir imagen / Sin seleccionar | 画像を選択 / 未選択 |
+| 请选择图片或文字 | Choose an image or text | Elija una imagen o texto | 画像またはテキストを選択してください |
+| 编辑文字 | Edit Text | Editar texto | テキストを編集 |
+| 间距 / 错列 | Gap / Stagger | Espacio / Alternar | 間隔 / 千鳥配置 |
+| 编辑全屏水印 | Edit Tiled Watermark | Editar marca en mosaico | 全画面透かしを編集 |
+| 删除图层 | Delete Layer | Eliminar capa | レイヤーを削除 |
 | 选中图层属性 | Selected Layer | Capa seleccionada | 選択中のレイヤー |
 | 大小 / 透明度 / 旋转 | Size / Opacity / Rotation | Tamaño / Opacidad / Rotación | サイズ / 不透明度 / 回転 |
-| 百分比 / 视觉比例 / px | % / Ratio / px | % / Ratio / px | % / 比率 / px |
+| % / px | % / px | % / px | % / px |
 | 水平内嵌 / 垂直内嵌 | Horizontal / Vertical | Horizontal / Vertical | 横方向 / 縦方向 |
 | 九宫格定位 | Anchor Position | Posición de anclaje | アンカー位置 |
 | 实时预览 | Live Preview | Vista previa | ライブプレビュー |
@@ -34,6 +43,7 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 约束数值 | Limit Value | Valor límite | 制限値 |
 | 不约束 / 最长边 / 最短边 / 比例 | No Limit / Long Edge / Short Edge / Scale | Sin límite / Lado largo / Lado corto / Escala | 制限なし / 長辺 / 短辺 / 倍率 |
 | 导出路径 | Export Path | Ruta de exportación | 書き出し先 |
+| 点击估算本批次文件大小 | Click to estimate the batch size | Haz clic para estimar el lote | クリックして一括サイズを推定 |
 | 选择导出路径 | Choose Export Path | Elegir ruta de exportación | 書き出し先を選択 |
 | 预计文件大小 | Estimated File Size | Tamaño estimado | 推定ファイルサイズ |
 | 当前照片约 {size} | Current image: {size} | Imagen actual: {size} | 現在の画像: {size} |

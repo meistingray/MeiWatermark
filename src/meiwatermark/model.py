@@ -51,6 +51,9 @@ class WatermarkLayer:
     vertical_unit: Unit = Unit.VISUAL
     anchor: Anchor = Anchor.BOTTOM_RIGHT
     rotation: float = 0
+    tiled: bool = False
+    tile_gap: float = 6
+    tile_stagger: bool = True
     image_path: str | None = None
     text: str = "© 2025"
     font_path: str | None = None
