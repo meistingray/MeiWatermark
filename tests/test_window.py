@@ -40,6 +40,7 @@ class WindowTests(unittest.TestCase):
         self.assertEqual([translate("百分比", language) for language in ("zh", "en", "es", "ja")], ["%", "%", "%", "%"])
         self.assertEqual([translate("视觉比例", language) for language in ("zh", "en", "es", "ja")], ["比例", "Ratio", "Ratio", "比率"])
         self.assertEqual([translate("字重", language) for language in ("zh", "en", "es", "ja")], ["字重", "Weight", "Peso", "ウェイト"])
+        self.assertEqual([translate("图片水印", language) for language in ("zh", "en", "es", "ja")], ["图片", "Image", "Imagen", "画像"])
 
     def test_unit_choices_update_after_language_switch(self) -> None:
         window = MainWindow()

@@ -16,7 +16,7 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 覆盖 / 取消 | Overwrite / Cancel | Sobrescribir / Cancelar | 上書き / キャンセル |
 | 预设名称无效 | Invalid preset name | Nombre no válido | 無効なプリセット名 |
 | 水印图层 | Watermark Layers | Capas de marca de agua | 透かしレイヤー |
-| 图片水印 | Image Watermark | Imagen | 画像透かし |
+| 图片 | Image | Imagen | 画像 |
 | 选中图层属性 | Selected Layer | Capa seleccionada | 選択中のレイヤー |
 | 大小 / 透明度 / 旋转 | Size / Opacity / Rotation | Tamaño / Opacidad / Rotación | サイズ / 不透明度 / 回転 |
 | 百分比 / 视觉比例 / px | % / Ratio / px | % / Ratio / px | % / 比率 / px |
