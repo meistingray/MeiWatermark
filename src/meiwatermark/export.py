@@ -30,7 +30,9 @@ class ExportWorker(QThread):
                 break
             try:
                 source = load_image(path)
-                output = resize_for_export(render(source.image, self.layers), self.settings)
+                base = resize_for_export(source.image, self.settings)
+                layers = scaled_layers(self.layers, base.width / source.image.width)
+                output = render(base, layers)
                 destination = self.destination if self.destination.is_absolute() else path.parent / str(self.destination).lstrip("\\/")
                 target = destination / f"{path.stem}{self.settings.suffix}{extension}"
                 counter = 2

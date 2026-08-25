@@ -13,6 +13,9 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from .model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer, default_font_path
 
+MAX_STAMP_SIZE = 4096
+MAX_TILE_COUNT = 4096
+
 
 @dataclass(slots=True)
 class ImageSource:
@@ -249,11 +252,13 @@ def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
     return stamp
 
 
+@lru_cache(maxsize=4)
 def _watermark_image(path: str, modified: int) -> Image.Image:
     with Image.open(path) as opened:
         return ImageOps.exif_transpose(opened).convert("RGBA")
 
 
+@lru_cache(maxsize=16)
 def _resized_watermark(path: str, modified: int, target_size: int) -> Image.Image:
     stamp = _watermark_image(path, modified)
     scale = target_size / max(stamp.width, stamp.height)
@@ -311,9 +316,10 @@ def render(base: Image.Image, layers: list[WatermarkLayer]) -> Image.Image:
     for layer in reversed(layers):
         if not layer.visible:
             continue
-        size = _size_pixels(layer, *result.size)
+        size = min(_size_pixels(layer, *result.size), MAX_STAMP_SIZE)
         if layer.tiled:
-            size = max(8, size)
+            minimum = max(8, ((result.width * result.height + MAX_TILE_COUNT - 1) // MAX_TILE_COUNT) ** 0.5)
+            size = max(round(minimum), size)
         stamp = _image_stamp(layer, size) if layer.kind is LayerKind.IMAGE else _text_stamp(layer, size)
         if stamp is None:
             continue

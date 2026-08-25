@@ -51,7 +51,7 @@ from .presets import (
     preset_directory,
     save_preset,
 )
-from .render import FontChoice, load_thumbnail, load_preview, render, scaled_layers, system_fonts
+from .render import FontChoice, ImageSource, load_thumbnail, load_preview, render, scaled_layers, system_fonts
 
 
 ACCENT = "#A40B5E"
@@ -247,6 +247,8 @@ class MainWindow(QMainWindow):
         self._estimate_cache: dict[tuple, float | None] = {}
         self._estimate_pending = False
         self.font_loaders: list[FontLoader] = []
+        self.preview_loader: ImageLoader | None = None
+        self.preview_pending: Path | None = None
         self.thumbnail_loader: ImageLoader | None = None
         self.thumbnail_queue: list[Path] = []
         self._loading_controls = False
@@ -523,6 +525,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(estimate_layout)
         self.export_button = QPushButton(self.t("导出"))
         self.export_button.setObjectName("primary")
+        self.export_button.setEnabled(self.worker is None or not self.worker.isRunning())
         self.export_button.clicked.connect(self.export_batch)
         layout.addWidget(self.export_button)
         self.quality.valueChanged.connect(self.update_export_settings)
@@ -731,19 +734,56 @@ class MainWindow(QMainWindow):
         if row < 0:
             return
         path = self.thumbnails.item(row).data(Qt.ItemDataRole.UserRole)
-        try:
-            self.source = load_preview(path, (1200, 1200))
+        self.source = None
+        self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
+        self.preview.setPixmap(QPixmap())
+        self._refresh_estimate_labels()
+        self._load_preview(path)
+
+    def _load_preview(self, path: Path) -> None:
+        if self.preview_loader is not None:
+            if self.preview_loader.path == path:
+                return
+            self.preview_loader.cancel()
+            self.preview_pending = path
+            return
+        worker = ImageLoader(path, (1200, 1200), True, self)
+        self.preview_loader = worker
+        worker.ready.connect(self._preview_loaded)
+        worker.failed.connect(self._preview_failed)
+        worker.finished.connect(lambda current=worker: self._preview_finished(current))
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+
+    def _preview_loaded(self, path: Path, source: ImageSource) -> None:
+        if self._selected_path() == path:
+            self.source = source
             self.schedule_preview()
             self.schedule_estimate()
-        except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(self, self.t("无法读取图片"), str(exc))
+
+    def _preview_failed(self, path: Path, error: str) -> None:
+        if self._selected_path() == path:
+            self.source = None
+            QMessageBox.warning(self, self.t("无法读取图片"), error)
+
+    def _preview_finished(self, worker: ImageLoader) -> None:
+        if self.preview_loader is not worker:
+            return
+        self.preview_loader = None
+        path, self.preview_pending = self.preview_pending, None
+        if path is not None and self._selected_path() == path:
+            self._load_preview(path)
 
     def remove_selected_photo(self) -> None:
         row = self.thumbnails.currentRow()
         if row < 0:
             return
         item = self.thumbnails.takeItem(row)
-        self.paths.remove(item.data(Qt.ItemDataRole.UserRole))
+        path = item.data(Qt.ItemDataRole.UserRole)
+        self.paths.remove(path)
+        self.thumbnail_queue = [queued for queued in self.thumbnail_queue if queued != path]
+        if self.thumbnail_loader is not None and self.thumbnail_loader.path == path:
+            self.thumbnail_loader.cancel()
         if self.thumbnails.count():
             self.thumbnails.setCurrentRow(min(row, self.thumbnails.count() - 1))
         else:
@@ -760,6 +800,12 @@ class MainWindow(QMainWindow):
 
     def clear_photo_list(self) -> None:
         self.paths.clear()
+        self.thumbnail_queue.clear()
+        if self.thumbnail_loader is not None:
+            self.thumbnail_loader.cancel()
+        self.preview_pending = None
+        if self.preview_loader is not None:
+            self.preview_loader.cancel()
         self.thumbnails.clear()
         self.source = None
         self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
@@ -1157,13 +1203,16 @@ class MainWindow(QMainWindow):
         self.schedule_preview()
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
-        workers = [worker for worker in (self.worker, self.estimate_worker, self.thumbnail_loader) if worker is not None]
+        workers = [worker for worker in (self.worker, self.estimate_worker, self.preview_loader, self.thumbnail_loader) if worker is not None]
         workers.extend(self.font_loaders)
-        for worker in workers:
-            if worker.isRunning():
+        active = [worker for worker in workers if worker.isRunning()]
+        if active:
+            for worker in active:
                 if hasattr(worker, "cancel"):
                     worker.cancel()
-                worker.wait()
+            event.ignore()
+            QTimer.singleShot(50, self.close)
+            return
         super().closeEvent(event)
 
     def refresh_preview(self) -> None:
@@ -1332,6 +1381,8 @@ class MainWindow(QMainWindow):
         self.output_path.setText(settings.output_path)
 
     def export_batch(self) -> None:
+        if self.worker is not None and self.worker.isRunning():
+            return
         if not self.paths:
             QMessageBox.information(self, self.t("没有图片"), self.t("请先打开或拖入图片。"))
             return
@@ -1341,11 +1392,17 @@ class MainWindow(QMainWindow):
         self.worker = ExportWorker(self.paths, Path(destination), deepcopy(self.layers), replace(self.settings))
         self.worker.progressed.connect(lambda current, total, name: self.status.showMessage(self.t("导出 {current}/{total}: {name}").format(current=current, total=total, name=name)))
         self.worker.finished_batch.connect(self.export_finished)
+        self.worker.finished.connect(lambda current=self.worker: self._export_worker_finished(current))
+        self.worker.finished.connect(self.worker.deleteLater)
         self.export_button.setEnabled(False)
         self.worker.start()
 
+    def _export_worker_finished(self, worker: ExportWorker) -> None:
+        if self.worker is worker:
+            self.worker = None
+            self.export_button.setEnabled(True)
+
     def export_finished(self, complete: int, failures: list[str]) -> None:
-        self.export_button.setEnabled(True)
         message = self.t("已导出 {count} 张图片。").format(count=complete)
         if failures:
             message += "\n" + self.t("失败 {count} 张：").format(count=len(failures)) + "\n" + "\n".join(failures[:3])

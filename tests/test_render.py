@@ -3,11 +3,12 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from PIL import Image
 
 from meiwatermark.model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
-from meiwatermark.render import _image_stamp, _resized_watermark, _size_pixels, _text_stamp, _watermark_image, estimate_size, export_size, load_image, load_preview, load_thumbnail, render, resize_for_export, save_image, system_fonts
+from meiwatermark.render import MAX_STAMP_SIZE, _image_stamp, _resized_watermark, _size_pixels, _text_stamp, _watermark_image, estimate_size, export_size, load_image, load_preview, load_thumbnail, render, resize_for_export, save_image, system_fonts
 
 
 class RenderTests(unittest.TestCase):
@@ -20,6 +21,18 @@ class RenderTests(unittest.TestCase):
     def test_size_percent_uses_the_short_image_edge(self) -> None:
         width, height = 1000, 500
         self.assertEqual(_size_pixels(WatermarkLayer(LayerKind.TEXT, "text", size=10, size_unit=Unit.PERCENT), width, height), 50)
+
+    def test_render_caps_extreme_watermark_sizes(self) -> None:
+        layer = WatermarkLayer(LayerKind.TEXT, "text", size=100000, size_unit=Unit.PERCENT, opacity=100)
+        with patch("meiwatermark.render._text_stamp", return_value=Image.new("RGBA", (1, 1), "white")) as stamp:
+            render(Image.new("RGBA", (1200, 1200)), [layer])
+        self.assertEqual(stamp.call_args.args[1], MAX_STAMP_SIZE)
+
+    def test_tiled_render_limits_stamp_count(self) -> None:
+        layer = WatermarkLayer(LayerKind.TEXT, "text", size=1, size_unit=Unit.PIXELS, tiled=True, opacity=100)
+        with patch("meiwatermark.render._text_stamp", return_value=Image.new("RGBA", (1, 1), "white")) as stamp:
+            render(Image.new("RGBA", (1200, 1200)), [layer])
+        self.assertGreaterEqual(stamp.call_args.args[1], 19)
 
     def test_tiled_watermark_repeats_across_the_canvas(self) -> None:
         base = Image.new("RGBA", (40, 40), "black")

@@ -21,6 +21,13 @@ class WindowTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
 
+    def wait_for_preview(self, window: MainWindow, path: Path | None = None) -> None:
+        for _ in range(100):
+            if window.source is not None and (path is None or window._selected_path() == path):
+                return
+            QTest.qWait(10)
+        self.fail("preview did not load")
+
     def test_long_image_name_is_truncated_to_twelve_characters(self) -> None:
         self.assertEqual(display_image_name(Path("very-long-photo-name.jpg")), "very-long-p…")
 
@@ -111,6 +118,7 @@ class WindowTests(unittest.TestCase):
             Image.new("RGB", (40, 30), "white").save(path)
             window = MainWindow()
             window.add_paths([path])
+            self.wait_for_preview(window, path)
             window.estimate_timer.stop()
             window._estimate_cache[window._estimate_key(path)] = 1024
             window.schedule_estimate()
@@ -127,6 +135,7 @@ class WindowTests(unittest.TestCase):
             Image.new("RGB", (12, 12), "black").save(second)
             window = MainWindow()
             window.add_paths([first, second])
+            self.wait_for_preview(window, second)
             window.estimate_timer.stop()
             window.update_estimate()
             self.assertEqual(len(worker_class.call_args.args[0]), 1)
@@ -227,7 +236,31 @@ class WindowTests(unittest.TestCase):
             window = MainWindow()
             window.add_paths([first])
             window.add_paths([latest])
+            self.wait_for_preview(window, latest)
             self.assertEqual(window.thumbnails.currentItem().data(Qt.ItemDataRole.UserRole), latest)
+            window.close()
+
+    def test_unreadable_photo_clears_the_previous_preview(self) -> None:
+        with TemporaryDirectory() as directory, patch("meiwatermark.window.QMessageBox.warning"):
+            good, bad = Path(directory) / "good.png", Path(directory) / "bad.png"
+            Image.new("RGB", (12, 12), "white").save(good)
+            bad.write_text("not an image", encoding="utf-8")
+            window = MainWindow()
+            window.add_paths([good])
+            self.wait_for_preview(window, good)
+            with patch("meiwatermark.window.load_preview", side_effect=OSError("bad image")), patch("meiwatermark.window.load_thumbnail", side_effect=OSError("bad image")):
+                window.add_paths([bad])
+                for _ in range(100):
+                    if window.preview_loader is None and window.thumbnail_loader is None:
+                        break
+                    QTest.qWait(10)
+            self.assertIsNone(window.source)
+            self.assertTrue(window.preview.pixmap().isNull())
+            window.clear_photo_list()
+            for _ in range(100):
+                if window.preview_loader is None and window.thumbnail_loader is None:
+                    break
+                QTest.qWait(10)
             window.close()
 
     def test_switching_photo_changes_the_current_estimate(self) -> None:
@@ -237,11 +270,13 @@ class WindowTests(unittest.TestCase):
             Image.new("RGB", (12, 12), "black").save(second)
             window = MainWindow()
             window.add_paths([first, second])
+            self.wait_for_preview(window, second)
             window._estimate_cache[window._estimate_key(first)] = 1024 * 1024
             window._estimate_cache[window._estimate_key(second)] = 2 * 1024 * 1024
             window._refresh_estimate_labels()
             self.assertIn("2.0 MB", window.current_estimate.text())
             window.thumbnails.setCurrentRow(0)
+            self.wait_for_preview(window, first)
             self.assertIn("1.0 MB", window.current_estimate.text())
             window.close()
 

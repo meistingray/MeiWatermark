@@ -3,11 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 from PIL import Image
 
 from meiwatermark.export import EstimateWorker, ExportWorker
-from meiwatermark.model import ExportSettings
+from meiwatermark.model import ExportSettings, ResizeMode
 from meiwatermark.render import load_image
 
 
@@ -31,6 +32,15 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(len(values), 1)
         self.assertEqual(values[0][0], key)
         self.assertGreater(values[0][1], 0)
+
+    def test_export_resizes_before_rendering(self) -> None:
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / "photo.png"
+            Image.new("RGB", (400, 200), "white").save(source)
+            worker = ExportWorker([source], Path("/output"), [], ExportSettings(format="PNG", resize_mode=ResizeMode.LONG_EDGE, resize_value=100))
+            with patch("meiwatermark.export.render", side_effect=lambda image, _: image) as render_image:
+                worker.run()
+        self.assertEqual(render_image.call_args.args[0].size, (100, 50))
 
 
 if __name__ == "__main__":
