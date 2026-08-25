@@ -60,6 +60,12 @@ class RenderTests(unittest.TestCase):
         self.assertIsNotNone(bounds)
         self.assertLess(bounds[3], stamp.height)
 
+    def test_text_size_sets_the_visible_stamp_long_edge(self) -> None:
+        stamp = _text_stamp(WatermarkLayer(LayerKind.TEXT, "text", text="MeiStingray but longer"), 100)
+        bounds = stamp.getchannel("A").getbbox()
+        self.assertIsNotNone(bounds)
+        self.assertLessEqual(abs(max(bounds[2] - bounds[0], bounds[3] - bounds[1]) - 100), 1)
+
     def test_text_stamp_supports_text_or_outline_only(self) -> None:
         outline_only = _text_stamp(WatermarkLayer(LayerKind.TEXT, "text", text="A", color=None, stroke_color=(255, 0, 0), stroke_width=3), 80)
         invisible = _text_stamp(WatermarkLayer(LayerKind.TEXT, "text", text="A", color=None, stroke_color=None), 80)

@@ -203,16 +203,36 @@ def system_fonts(language: str) -> list[FontChoice]:
 
 
 def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
-    font = _font(layer, target_size)
-    probe = Image.new("RGBA", (1, 1))
     stroke_width = layer.stroke_width if layer.stroke_color else 0
-    box = ImageDraw.Draw(probe).textbbox((0, 0), layer.text, font=font, stroke_width=stroke_width)
-    width, height = max(1, box[2] - box[0]), max(1, box[3] - box[1])
-    padding = stroke_width + 2
-    stamp = Image.new("RGBA", (width + padding * 2, height + padding * 2))
-    draw = ImageDraw.Draw(stamp)
-    if layer.color or layer.stroke_color:
-        draw.text((padding - box[0], padding - box[1]), layer.text, font=font, fill=(*layer.color, 255) if layer.color else None, stroke_width=stroke_width, stroke_fill=(*layer.stroke_color, 255) if layer.stroke_color else None)
+
+    def stamp_at(font_size: int) -> Image.Image:
+        font = _font(layer, font_size)
+        probe = Image.new("RGBA", (1, 1))
+        box = ImageDraw.Draw(probe).textbbox((0, 0), layer.text, font=font, stroke_width=stroke_width)
+        width, height = max(1, box[2] - box[0]), max(1, box[3] - box[1])
+        padding = stroke_width + 2
+        stamp = Image.new("RGBA", (width + padding * 2, height + padding * 2))
+        if layer.color or layer.stroke_color:
+            ImageDraw.Draw(stamp).text((padding - box[0], padding - box[1]), layer.text, font=font, fill=(*layer.color, 255) if layer.color else None, stroke_width=stroke_width, stroke_fill=(*layer.stroke_color, 255) if layer.stroke_color else None)
+        return stamp
+
+    sample_size = 100
+    sample = stamp_at(sample_size)
+    bounds = sample.getchannel("A").getbbox()
+    if not bounds:
+        return sample
+    font_size = max(1, round(sample_size * target_size / max(bounds[2] - bounds[0], bounds[3] - bounds[1])))
+    stamp = stamp_at(font_size)
+    bounds = stamp.getchannel("A").getbbox()
+    if bounds:
+        stamp = stamp.crop(bounds)
+        actual_size = max(stamp.size)
+        if actual_size != target_size:
+            scale = target_size / actual_size
+            stamp = stamp.resize((max(1, round(stamp.width * scale)), max(1, round(stamp.height * scale))), Image.Resampling.LANCZOS)
+        padded = Image.new("RGBA", (stamp.width + 4, stamp.height + 4))
+        padded.alpha_composite(stamp, (2, 2))
+        return padded
     return stamp
 
 
