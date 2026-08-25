@@ -16,30 +16,31 @@ Batch export to JPEG, PNG, and WebP with quality control, resize constraints, fi
 
 ## Features
 
-- **Multi-layer watermarks**: combine multiple image and text watermark layers; toggle, reorder, and drag layers as needed.
-- **Consistent visual results**: set watermark size in percent or pixels, and inset margins in visual ratio, percent, or pixels for landscape, portrait, and different resolutions.
+- **Multi-layer watermarks**: combine multiple image and text watermark layers; enable, reorder, and drag layers as needed.
+- **Consistent visual results**: set watermark size in percent or pixels; text watermark size means the rendered text’s longest edge, so image and text layers share the same size semantics.
 - **Precise placement**: control nine-grid anchors, horizontal and vertical insets, opacity, and rotation independently. Insets can be negative.
-- **Text watermarks**: use the system font list; set text and outline colors independently, including no color, and choose an outline width.
-- **Live preview**: review the result as you work; import images by dragging them anywhere onto the window and manage them from the thumbnail list.
-- **Batch export**: JPEG, PNG, and WebP support; quality defaults to 100, with long-edge, short-edge, and scale-based resize limits.
-- **Output control**: estimates individual and batch file sizes before export; can retain EXIF and ICC profiles; supports paths relative to each original image.
+- **Text watermarks**: use the system font list with localized font names; set text and outline colors independently, including no color, and choose an outline width.
+- **Live preview**: review the result as you work; drag images anywhere into the window, with the newest imported image selected and brought into view automatically.
+- **Photo list management**: use the Delete key, the context menu, or Clear List to remove photos from the current list. Original files are never deleted.
+- **Batch export**: JPEG, PNG, and WebP support; quality defaults to 100, with optional long-edge, short-edge, or scale-based resize limits.
+- **Output control**: estimate individual and batch file sizes before export; retain EXIF and ICC profiles when needed; support paths relative to each original image.
 - **Preset management**: each preset stores both watermark layers and export settings in a separate JSON file for easy backup, sharing, or cleanup.
 - **Local processing**: image loading, previewing, and export are performed locally without a cloud service.
 - **Multilingual interface**: Simplified Chinese, English, Spanish, and Japanese are included.
 
 ## Quick Start
 
-1. Select **Open Images**, or drag one or more images onto the window.
+1. Select **Open Images**, or drag one or more images anywhere into the window.
 2. Add an image watermark or a text watermark, then arrange and enable layers in the layer list.
 3. Select a layer and set its size, inset, opacity, rotation, and nine-grid anchor.
-4. Choose output format, quality, resize limit, and destination.
+4. Choose output format, quality, optional resize limit, and destination.
 5. Select **Export** to process the batch.
-
-> In the thumbnail list, use the `Delete` key or the context menu to remove an image from the current list. This never deletes the original file from disk.
 
 ## Scale and Positioning
 
-**Visual Ratio** bases the inset on the image's short edge, so landscape and portrait images keep similar perceived margins in full-screen viewing. **Percent** uses the relevant image width or height; **px** is intended for fixed-pixel requirements.
+**Visual Ratio** bases the inset on the image’s short edge, so landscape and portrait images keep similar perceived margins in full-screen viewing. **Percent** uses the relevant image width or height; **px** is intended for fixed-pixel requirements.
+
+Watermark size percentages use the photo’s short edge as their reference. For text watermarks, the percentage controls the longest edge of the rendered text as a whole, not the font size, so longer text remains within the intended visual proportion.
 
 For most photographic work, use **Percent** for watermark size and **Visual Ratio** for insets. Choose the anchor with the nine-grid, then fine-tune the two inset values for consistent placement across the batch.
 

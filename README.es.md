@@ -17,11 +17,12 @@ Exporta lotes en JPEG, PNG y WebP con control de calidad, restricciones de tama�
 ## Funciones
 
 - **Marcas de agua multicapa**: combine varias capas de imagen y texto; active, ordene y arrastre las capas.
-- **Resultado visual coherente**: defina el tamaño en porcentaje o píxeles y los márgenes internos en proporción visual, porcentaje o píxeles para imágenes horizontales, verticales y de distintas resoluciones.
-- **Posicionamiento preciso**: controle de forma independiente el anclaje de nueve puntos, los márgenes horizontal y vertical, la opacidad y la rotación. Los márgenes pueden ser negativos.
-- **Marcas de texto**: use la lista de fuentes del sistema; configure por separado el color del texto y del contorno, incluso sin color, y el grosor del contorno.
-- **Vista previa en tiempo real**: revise el resultado mientras trabaja; importe imágenes arrastrándolas a cualquier zona de la ventana y adminístrelas desde la lista de miniaturas.
-- **Exportación por lotes**: JPEG, PNG y WebP; calidad predeterminada de 100 y límites por lado largo, lado corto o escala.
+- **Resultado visual coherente**: defina el tamaño en porcentaje o píxeles; en las marcas de texto, el tamaño corresponde al lado mayor del texto renderizado, no al tamaño de fuente.
+- **Posicionamiento preciso**: controle el anclaje de nueve puntos, los márgenes horizontal y vertical, la opacidad y la rotación. Los márgenes pueden ser negativos.
+- **Marcas de texto**: use la lista de fuentes del sistema con nombres localizados; configure por separado el color del texto y del contorno, incluso sin color, y el grosor del contorno.
+- **Vista previa en tiempo real**: revise el resultado mientras trabaja; importe imágenes arrastrándolas a cualquier zona de la ventana y la última imagen añadida se seleccionará y mostrará automáticamente.
+- **Gestión de fotos**: use `Delete`, el menú contextual o **Vaciar lista** para quitar fotos de la lista actual. Los archivos originales nunca se eliminan.
+- **Exportación por lotes**: JPEG, PNG y WebP; calidad predeterminada de 100 y límites opcionales por lado largo, lado corto o escala.
 - **Control de salida**: estima el tamaño de archivos individuales y del lote antes de exportar; permite conservar EXIF y perfiles ICC; admite rutas relativas a cada imagen original.
 - **Gestión de preajustes**: cada preajuste guarda las capas y la configuración de exportación en un archivo JSON independiente.
 - **Procesamiento local**: la lectura, vista previa y exportación se realizan localmente, sin servicios en la nube.
@@ -29,17 +30,17 @@ Exporta lotes en JPEG, PNG y WebP con control de calidad, restricciones de tama�
 
 ## Uso rápido
 
-1. Seleccione **Abrir imágenes** o arrastre una o varias imágenes a la ventana.
+1. Seleccione **Abrir** o arrastre una o varias imágenes a cualquier zona de la ventana.
 2. Añada una marca de agua de imagen o texto y ordene las capas en la lista.
 3. Seleccione una capa y ajuste tamaño, margen, opacidad, rotación y anclaje de nueve puntos.
-4. Elija formato, calidad, límite de tamaño y destino de salida.
+4. Elija formato, calidad, límite opcional de tamaño y destino de salida.
 5. Seleccione **Exportar** para procesar el lote.
-
-> En la lista de miniaturas, use `Delete` o el menú contextual para quitar una imagen de la lista actual. El archivo original no se elimina del disco.
 
 ## Escala y posicionamiento
 
 La **Proporción visual** basa el margen en el lado corto de la imagen, para conservar márgenes percibidos similares en imágenes horizontales y verticales. **Porcentaje** usa el ancho o alto correspondiente; **px** está pensado para requisitos de píxeles fijos.
+
+El porcentaje del tamaño de la marca usa el lado corto de la foto como referencia. En las marcas de texto, controla el lado mayor del texto renderizado completo, de modo que una frase más larga conserve la proporción visual prevista.
 
 Para la mayoría de trabajos fotográficos, use **Porcentaje** para el tamaño de la marca de agua y **Proporción visual** para los márgenes. Elija primero el anclaje con la cuadrícula de nueve puntos y después ajuste los márgenes.
 
