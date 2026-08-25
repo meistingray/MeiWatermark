@@ -32,6 +32,8 @@ class WindowTests(unittest.TestCase):
         window = MainWindow()
         self.assertIn("QComboBox::drop-down", window.styleSheet())
         self.assertIn("down-arrow.svg", window.styleSheet())
+        self.assertIn("width: 18px", window.styleSheet())
+        self.assertNotIn("padding-right: 26px", window.styleSheet())
         window.close()
 
     def test_compact_unit_translations(self) -> None:

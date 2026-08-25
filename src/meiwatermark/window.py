@@ -519,8 +519,7 @@ class MainWindow(QMainWindow):
             QMenuBar::item:selected {{ background: #eceef2; }}
             QPushButton, QComboBox, QLineEdit {{ min-height: 24px; border: 1px solid #d7dbe1; border-radius: 2px; padding: 1px 7px; background: #fff; }}
             QPushButton:hover, QComboBox:hover {{ border-color: {ACCENT}; }}
-            QComboBox {{ padding-right: 26px; }}
-            QComboBox::drop-down {{ width: 22px; border: none; background: transparent; }}
+            QComboBox::drop-down {{ width: 18px; border: none; background: transparent; }}
             QComboBox::down-arrow {{ image: url("{arrow}"); width: 8px; height: 5px; }}
             QPushButton#primary {{ background: {ACCENT}; color: white; border: 1px solid {ACCENT}; font-weight: 600; }}
             QPushButton#presetSave {{ color: {ACCENT}; border-color: {ACCENT}; font-weight: 600; }}
