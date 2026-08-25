@@ -120,6 +120,17 @@ class WindowTests(unittest.TestCase):
             self.assertEqual(window.thumbnails.count(), 0)
             window.close()
 
+    def test_newly_added_photo_becomes_current(self) -> None:
+        with TemporaryDirectory() as directory:
+            first, latest = Path(directory) / "first.png", Path(directory) / "latest.png"
+            Image.new("RGB", (12, 12), "white").save(first)
+            Image.new("RGB", (12, 12), "black").save(latest)
+            window = MainWindow()
+            window.add_paths([first])
+            window.add_paths([latest])
+            self.assertEqual(window.thumbnails.currentItem().data(Qt.ItemDataRole.UserRole), latest)
+            window.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -605,6 +605,7 @@ class MainWindow(QMainWindow):
         if not added:
             return
         self.paths.extend(added)
+        last_item = None
         for path in added:
             item = QListWidgetItem(display_image_name(path))
             item.setData(Qt.ItemDataRole.UserRole, path)
@@ -614,8 +615,10 @@ class MainWindow(QMainWindow):
             except Exception:  # noqa: BLE001
                 pass
             self.thumbnails.addItem(item)
-        if self.thumbnails.currentRow() < 0:
-            self.thumbnails.setCurrentRow(0)
+            last_item = item
+        if last_item is not None:
+            self.thumbnails.setCurrentItem(last_item)
+            self.thumbnails.scrollToItem(last_item, QAbstractItemView.ScrollHint.PositionAtCenter)
         self.status.showMessage(self.t("已导入 {count} 张图片").format(count=len(added)), 3000)
 
     def select_photo(self, row: int) -> None:
