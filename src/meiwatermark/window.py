@@ -682,23 +682,46 @@ class MainWindow(QMainWindow):
     def edit_text_dialog(self, layer: WatermarkLayer) -> bool:
         dialog = QDialog(self)
         dialog.setWindowTitle(self.t("文字水印"))
+        dialog.setMinimumWidth(420)
         form = QFormLayout(dialog)
         text = QLineEdit(layer.text)
         form.addRow(self.t("文字"), text)
         font = QComboBox()
+        font.setMinimumWidth(300)
         font.addItem(self.t("系统默认"), None)
-        font.addItem(self.t("正在读取字体…"), None)
         font.setEnabled(False)
+        weight = QComboBox()
+        weight.setMinimumWidth(130)
+        weight.setEnabled(False)
 
         def populate_fonts(choices: list[FontChoice]) -> None:
             selected = (layer.font_path, layer.font_index, tuple(layer.font_variation))
+            families: dict[str, list[FontChoice]] = {}
+            for choice in choices:
+                families.setdefault(choice.family, []).append(choice)
             font.clear()
             font.addItem(self.t("系统默认"), None)
-            for choice in choices:
-                font.addItem(choice.label, choice)
-            index = next((position for position in range(1, font.count()) if (choice := font.itemData(position)) and (choice.path, choice.index, choice.variation) == selected), 0)
+            for family in sorted(families, key=lambda name: (not any(ord(character) > 127 for character in name), name.casefold())):
+                font.addItem(family, families[family])
+
+            def populate_weights() -> None:
+                weight.clear()
+                choices_for_family = font.currentData()
+                if not choices_for_family:
+                    weight.setEnabled(False)
+                    return
+                unique = {(choice.style, choice.path, choice.index, choice.variation): choice for choice in choices_for_family}
+                for choice in sorted(unique.values(), key=lambda item: item.style.casefold()):
+                    weight.addItem(choice.style, choice)
+                index = next((position for position in range(weight.count()) if (choice := weight.itemData(position)) and (choice.path, choice.index, choice.variation) == selected), 0)
+                weight.setCurrentIndex(index)
+                weight.setEnabled(True)
+
+            index = next((position for position in range(1, font.count()) if any((choice.path, choice.index, choice.variation) == selected for choice in font.itemData(position))), 0)
             font.setCurrentIndex(index)
+            font.currentIndexChanged.connect(populate_weights)
             font.setEnabled(True)
+            populate_weights()
 
         loader = FontLoader(self.language, self)
         loader.ready.connect(populate_fonts)
@@ -707,6 +730,7 @@ class MainWindow(QMainWindow):
         self.font_loaders.append(loader)
         loader.start()
         form.addRow(self.t("字体"), font)
+        form.addRow(self.t("字重"), weight)
         text_color = QPushButton()
         stroke_color = QPushButton()
         text_none = QCheckBox(self.t("无颜色"))
@@ -743,7 +767,7 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted or not text.text().strip():
             return False
         layer.text = text.text().strip()
-        choice = font.currentData()
+        choice = weight.currentData()
         layer.font_path = choice.path if isinstance(choice, FontChoice) else None
         layer.font_index = choice.index if isinstance(choice, FontChoice) else 0
         layer.font_variation = list(choice.variation) if isinstance(choice, FontChoice) else []

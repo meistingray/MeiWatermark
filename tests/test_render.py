@@ -78,7 +78,7 @@ class RenderTests(unittest.TestCase):
 
     def test_system_font_names_do_not_contain_null_characters(self) -> None:
         fonts = system_fonts("zh")
-        self.assertTrue(all("\x00" not in choice.label and "\ufffd" not in choice.label for choice in fonts))
+        self.assertTrue(all("\x00" not in choice.family and "\ufffd" not in choice.family for choice in fonts))
         self.assertTrue(all(Path(choice.path).is_file() for choice in fonts))
 
     def test_variable_font_instances_are_enumerated(self) -> None:

@@ -24,7 +24,8 @@ class ImageSource:
 
 @dataclass(frozen=True, slots=True)
 class FontChoice:
-    label: str
+    family: str
+    style: str
     path: str
     index: int = 0
     variation: tuple[float, ...] = ()
@@ -141,13 +142,13 @@ def _font_name(table, name_ids: tuple[int, ...], language: str) -> str:  # type:
     return ""
 
 
-def _labels(table, style_id: int | None = None) -> dict[str, str]:  # type: ignore[no-untyped-def]
-    labels: dict[str, str] = {}
+def _names(table, style_id: int | None = None) -> tuple[dict[str, str], dict[str, str]]:  # type: ignore[no-untyped-def]
+    families: dict[str, str] = {}
+    styles: dict[str, str] = {}
     for language in _FONT_LANGUAGES:
-        family = _font_name(table, (16, 1), language) or "Unknown font"
-        style = _font_name(table, (style_id,) if style_id else (17, 2), language)
-        labels[language] = f"{family} · {style}" if style else family
-    return labels
+        families[language] = _font_name(table, (16, 1), language) or "Unknown font"
+        styles[language] = _font_name(table, (style_id,) if style_id else (17, 2), language) or "Regular"
+    return families, styles
 
 
 def _font_entries(path: Path) -> list[dict[str, object]]:
@@ -162,11 +163,14 @@ def _font_entries(path: Path) -> list[dict[str, object]]:
         entries: list[dict[str, object]] = []
         for index, font in enumerate(fonts):
             table = font["name"]
-            entries.append({"path": str(path), "index": index, "variation": [], "labels": _labels(table)})
-            if "fvar" in font:
+            if "fvar" not in font or not font["fvar"].instances:
+                families, styles = _names(table)
+                entries.append({"path": str(path), "index": index, "variation": [], "families": families, "styles": styles})
+            else:
                 axes = font["fvar"].axes
                 for instance in font["fvar"].instances:
-                    entries.append({"path": str(path), "index": index, "variation": [float(instance.coordinates.get(axis.axisTag, axis.defaultValue)) for axis in axes], "labels": _labels(table, instance.subfamilyNameID)})
+                    families, styles = _names(table, instance.subfamilyNameID)
+                    entries.append({"path": str(path), "index": index, "variation": [float(instance.coordinates.get(axis.axisTag, axis.defaultValue)) for axis in axes], "families": families, "styles": styles})
         return entries
     except (OSError, KeyError, TTLibError, ValueError):
         return []
@@ -186,16 +190,16 @@ def system_fonts(language: str) -> list[FontChoice]:
         cached = json.loads(cache_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         cached = {}
-    entries = cached.get("fonts") if cached.get("sources") == fingerprint else None
+    entries = cached.get("fonts") if cached.get("version") == 2 and cached.get("sources") == fingerprint else None
     if not isinstance(entries, list):
         entries = [entry for path in sources for entry in _font_entries(path)]
         try:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
-            cache_path.write_text(json.dumps({"sources": fingerprint, "fonts": entries}, ensure_ascii=False), encoding="utf-8")
+            cache_path.write_text(json.dumps({"version": 2, "sources": fingerprint, "fonts": entries}, ensure_ascii=False), encoding="utf-8")
         except OSError:
             pass
-    choices = [FontChoice(str(entry["labels"].get(language, entry["labels"].get("zh", "Unknown font"))), str(entry["path"]), int(entry.get("index", 0)), tuple(float(value) for value in entry.get("variation", []))) for entry in entries if isinstance(entry, dict) and isinstance(entry.get("labels"), dict) and entry.get("path")]
-    return sorted(choices, key=lambda choice: choice.label.casefold())
+    choices = [FontChoice(str(entry["families"].get(language, entry["families"].get("zh", "Unknown font"))), str(entry["styles"].get(language, entry["styles"].get("zh", "Regular"))), str(entry["path"]), int(entry.get("index", 0)), tuple(float(value) for value in entry.get("variation", []))) for entry in entries if isinstance(entry, dict) and isinstance(entry.get("families"), dict) and isinstance(entry.get("styles"), dict) and entry.get("path")]
+    return sorted(choices, key=lambda choice: (not any(ord(character) > 127 for character in choice.family), choice.family.casefold(), choice.style.casefold()))
 
 
 def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
