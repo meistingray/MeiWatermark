@@ -42,6 +42,7 @@ class WindowTests(unittest.TestCase):
 
     def test_slider_fields_accept_direct_values_and_double_click_resets(self) -> None:
         window = MainWindow()
+        self.assertEqual([field.width() for field in (window.opacity_number, window.rotation_number, window.quality_number)], [42, 42, 42])
         for field, slider, value in ((window.opacity_number, window.opacity, "35"), (window.rotation_number, window.rotation, "-45"), (window.quality_number, window.quality, "72")):
             field.setText(value)
             field.editingFinished.emit()

@@ -466,7 +466,7 @@ class MainWindow(QMainWindow):
         slider = ResetSlider(minimum, maximum, value, reset_value)
         number = QLineEdit(str(value))
         number.setValidator(QIntValidator(minimum, maximum, number))
-        number.setFixedWidth(36)
+        number.setFixedWidth(42)
         number.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         slider.valueChanged.connect(lambda current: number.setText(str(current)))
 
