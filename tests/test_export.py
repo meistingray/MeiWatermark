@@ -42,6 +42,12 @@ class ExportTests(unittest.TestCase):
                 worker.run()
         self.assertEqual(render_image.call_args.args[0].size, (100, 50))
 
+    def test_export_worker_keeps_a_path_snapshot(self) -> None:
+        paths = [Path("first.png")]
+        worker = ExportWorker(paths, Path("output"), [], ExportSettings(format="PNG"))
+        paths.clear()
+        self.assertEqual(worker.paths, [Path("first.png")])
+
 
 if __name__ == "__main__":
     unittest.main()

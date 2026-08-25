@@ -17,6 +17,10 @@ MAX_STAMP_SIZE = 4096
 MAX_TILE_COUNT = 4096
 
 
+class RenderLimitError(ValueError):
+    pass
+
+
 @dataclass(slots=True)
 class ImageSource:
     image: Image.Image
@@ -252,15 +256,10 @@ def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
     return stamp
 
 
-@lru_cache(maxsize=4)
-def _watermark_image(path: str, modified: int) -> Image.Image:
+@lru_cache(maxsize=1)
+def _resized_watermark(path: str, modified: int, file_size: int, target_size: int) -> Image.Image:
     with Image.open(path) as opened:
-        return ImageOps.exif_transpose(opened).convert("RGBA")
-
-
-@lru_cache(maxsize=16)
-def _resized_watermark(path: str, modified: int, target_size: int) -> Image.Image:
-    stamp = _watermark_image(path, modified)
+        stamp = ImageOps.exif_transpose(opened).convert("RGBA")
     scale = target_size / max(stamp.width, stamp.height)
     return stamp.resize((max(1, round(stamp.width * scale)), max(1, round(stamp.height * scale))), Image.Resampling.LANCZOS)
 
@@ -270,7 +269,8 @@ def _image_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image | None:
     if not layer.image_path or not path.is_file():
         return None
     path = path.resolve()
-    return _resized_watermark(str(path), path.stat().st_mtime_ns, target_size)
+    stat = path.stat()
+    return _resized_watermark(str(path), stat.st_mtime_ns, stat.st_size, target_size)
 
 
 def _apply_opacity(stamp: Image.Image, opacity: int) -> Image.Image:
@@ -301,7 +301,18 @@ def _position(layer: WatermarkLayer, base_size: tuple[int, int], stamp_size: tup
     return x, y
 
 
+def _tile_count(result: Image.Image, stamp: Image.Image, layer: WatermarkLayer) -> int:
+    gap = max(0, round(min(result.size) * layer.tile_gap / 100))
+    step_x, step_y = max(1, stamp.width + gap), max(1, stamp.height + gap)
+    rows = len(range(-step_y, result.height + step_y, step_y))
+    even_columns = len(range(-step_x, result.width + step_x, step_x))
+    odd_columns = len(range(-step_x + step_x // 2, result.width + step_x, step_x)) if layer.tile_stagger else even_columns
+    return (rows + 1) // 2 * even_columns + rows // 2 * odd_columns
+
+
 def _tile(result: Image.Image, stamp: Image.Image, layer: WatermarkLayer) -> None:
+    if _tile_count(result, stamp, layer) > MAX_TILE_COUNT:
+        raise RenderLimitError(f"tiled watermark exceeds {MAX_TILE_COUNT} stamps")
     gap = max(0, round(min(result.size) * layer.tile_gap / 100))
     step_x, step_y = max(1, stamp.width + gap), max(1, stamp.height + gap)
     for row, y in enumerate(range(-step_y, result.height + step_y, step_y)):
@@ -311,15 +322,17 @@ def _tile(result: Image.Image, stamp: Image.Image, layer: WatermarkLayer) -> Non
 
 
 def render(base: Image.Image, layers: list[WatermarkLayer]) -> Image.Image:
-    result = base.convert("RGBA").copy()
+    result = base.copy() if base.mode == "RGBA" else base.convert("RGBA")
     # The first layer in the UI is visually the topmost layer.
     for layer in reversed(layers):
         if not layer.visible:
             continue
-        size = min(_size_pixels(layer, *result.size), MAX_STAMP_SIZE)
-        if layer.tiled:
-            minimum = max(8, ((result.width * result.height + MAX_TILE_COUNT - 1) // MAX_TILE_COUNT) ** 0.5)
-            size = max(round(minimum), size)
+        size = _size_pixels(layer, *result.size)
+        if size > MAX_STAMP_SIZE:
+            if layer.size_unit is Unit.PIXELS:
+                size = MAX_STAMP_SIZE
+            else:
+                raise RenderLimitError(f"watermark size exceeds {MAX_STAMP_SIZE} px")
         stamp = _image_stamp(layer, size) if layer.kind is LayerKind.IMAGE else _text_stamp(layer, size)
         if stamp is None:
             continue

@@ -26,6 +26,7 @@ TEXT = {
     "导出路径": {"zh": "导出路径", "en": "Export Path", "es": "Ruta de exportación", "ja": "書き出し先"}, "选择": {"zh": "选择", "en": "Choose", "es": "Elegir", "ja": "選択"}, "清空": {"zh": "清空", "en": "Clear", "es": "Limpiar", "ja": "クリア"}, "导出": {"zh": "导出", "en": "Export", "es": "Exportar", "ja": "書き出す"},
     "选择导出路径": {"zh": "选择导出路径", "en": "Choose Export Path", "es": "Elegir ruta de exportación", "ja": "書き出し先を選択"},
     "当前照片约 {size}": {"zh": "当前照片约 {size}", "en": "Current image: {size}", "es": "Imagen actual: {size}", "ja": "現在の画像: {size}"},
+    "水印设置超过限制": {"zh": "水印设置超过限制", "en": "Watermark settings exceed the limit", "es": "La marca de agua supera el límite", "ja": "透かし設定が上限を超えています"},
     "没有图片": {"zh": "没有图片", "en": "No Images", "es": "No hay imágenes", "ja": "画像がありません"},
     "请先打开或拖入图片。": {"zh": "请先打开或拖入图片。", "en": "Open or drag in images first.", "es": "Primero abre o arrastra imágenes.", "ja": "先に画像を開くかドラッグしてください。"},
     "导出完成": {"zh": "导出完成", "en": "Export Complete", "es": "Exportación completada", "ja": "書き出し完了"},

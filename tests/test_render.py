@@ -8,7 +8,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from meiwatermark.model import Anchor, ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
-from meiwatermark.render import MAX_STAMP_SIZE, _image_stamp, _resized_watermark, _size_pixels, _text_stamp, _watermark_image, estimate_size, export_size, load_image, load_preview, load_thumbnail, render, resize_for_export, save_image, system_fonts
+from meiwatermark.render import MAX_STAMP_SIZE, RenderLimitError, _image_stamp, _resized_watermark, _size_pixels, _text_stamp, estimate_size, export_size, load_image, load_preview, load_thumbnail, render, resize_for_export, save_image, system_fonts
 
 
 class RenderTests(unittest.TestCase):
@@ -22,17 +22,28 @@ class RenderTests(unittest.TestCase):
         width, height = 1000, 500
         self.assertEqual(_size_pixels(WatermarkLayer(LayerKind.TEXT, "text", size=10, size_unit=Unit.PERCENT), width, height), 50)
 
-    def test_render_caps_extreme_watermark_sizes(self) -> None:
+    def test_percent_watermark_over_the_limit_fails(self) -> None:
         layer = WatermarkLayer(LayerKind.TEXT, "text", size=100000, size_unit=Unit.PERCENT, opacity=100)
+        with self.assertRaises(RenderLimitError):
+            render(Image.new("RGBA", (1200, 1200)), [layer])
+
+    def test_pixel_watermark_over_the_limit_is_capped(self) -> None:
+        layer = WatermarkLayer(LayerKind.TEXT, "text", size=MAX_STAMP_SIZE + 1, size_unit=Unit.PIXELS, opacity=100)
         with patch("meiwatermark.render._text_stamp", return_value=Image.new("RGBA", (1, 1), "white")) as stamp:
             render(Image.new("RGBA", (1200, 1200)), [layer])
         self.assertEqual(stamp.call_args.args[1], MAX_STAMP_SIZE)
 
-    def test_tiled_render_limits_stamp_count(self) -> None:
+    def test_tiled_render_keeps_the_requested_stamp_size(self) -> None:
         layer = WatermarkLayer(LayerKind.TEXT, "text", size=1, size_unit=Unit.PIXELS, tiled=True, opacity=100)
         with patch("meiwatermark.render._text_stamp", return_value=Image.new("RGBA", (1, 1), "white")) as stamp:
             render(Image.new("RGBA", (1200, 1200)), [layer])
-        self.assertGreaterEqual(stamp.call_args.args[1], 19)
+        self.assertEqual(stamp.call_args.args[1], 1)
+
+    def test_tiled_render_fails_before_pasting_too_many_stamps(self) -> None:
+        layer = WatermarkLayer(LayerKind.TEXT, "text", size=1, size_unit=Unit.PIXELS, tiled=True, tile_gap=0, opacity=100)
+        with patch("meiwatermark.render._text_stamp", return_value=Image.new("RGBA", (1, 1), "white")):
+            with self.assertRaises(RenderLimitError):
+                render(Image.new("RGBA", (1200, 1200)), [layer])
 
     def test_tiled_watermark_repeats_across_the_canvas(self) -> None:
         base = Image.new("RGBA", (40, 40), "black")
@@ -45,7 +56,6 @@ class RenderTests(unittest.TestCase):
         self.assertGreater(result.getpixel((24, 24))[0], 0)
 
     def test_image_stamp_reuses_the_resized_watermark(self) -> None:
-        _watermark_image.cache_clear()
         _resized_watermark.cache_clear()
         with TemporaryDirectory() as directory:
             path = Path(directory) / "mark.png"
@@ -55,6 +65,14 @@ class RenderTests(unittest.TestCase):
             second = _image_stamp(layer, 96)
         self.assertIs(first, second)
         self.assertEqual(_resized_watermark.cache_info().hits, 1)
+        self.assertEqual(_resized_watermark.cache_info().maxsize, 1)
+
+    def test_render_does_not_modify_its_input_image(self) -> None:
+        base = Image.new("RGBA", (20, 20), "black")
+        before = base.tobytes()
+        result = render(base, [])
+        self.assertEqual(base.tobytes(), before)
+        self.assertIsNot(result, base)
 
     def test_resize_long_edge_keeps_ratio(self) -> None:
         image = Image.new("RGBA", (4000, 2000))

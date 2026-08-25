@@ -51,7 +51,7 @@ from .presets import (
     preset_directory,
     save_preset,
 )
-from .render import FontChoice, ImageSource, load_thumbnail, load_preview, render, scaled_layers, system_fonts
+from .render import MAX_STAMP_SIZE, FontChoice, ImageSource, RenderLimitError, load_thumbnail, load_preview, render, scaled_layers, system_fonts
 
 
 ACCENT = "#A40B5E"
@@ -282,6 +282,9 @@ class MainWindow(QMainWindow):
         selected_path = self.thumbnails.currentItem().data(Qt.ItemDataRole.UserRole) if self.thumbnails.currentItem() else None
         selected_layer = self.layer_list.currentItem().data(Qt.ItemDataRole.UserRole) if self.layer_list.currentItem() else None
         settings = self.settings
+        self.thumbnail_queue.clear()
+        if self.thumbnail_loader is not None:
+            self.thumbnail_loader.cancel()
         self.language = language
         old = self.takeCentralWidget()
         self.menuBar().clear()
@@ -384,7 +387,7 @@ class MainWindow(QMainWindow):
         properties.setContentsMargins(7, 7, 7, 7)
         properties.setSpacing(8)
         self.size_value, self.size_unit = self._number_unit(24, [self.t("百分比"), "px"], 1)
-        properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 1, 100000), self.size_unit))
+        properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 1, MAX_STAMP_SIZE), self.size_unit))
         self.horizontal_value, self.horizontal_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
         self.horizontal_row = self._property_row(self.t("水平内嵌"), self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit)
         properties.addWidget(self.horizontal_row)
@@ -742,7 +745,7 @@ class MainWindow(QMainWindow):
 
     def _load_preview(self, path: Path) -> None:
         if self.preview_loader is not None:
-            if self.preview_loader.path == path:
+            if self.preview_loader.path == path and self.preview_pending is None:
                 return
             self.preview_loader.cancel()
             self.preview_pending = path
@@ -837,6 +840,8 @@ class MainWindow(QMainWindow):
             self.add_layer(layer)
 
     def add_layer(self, layer: WatermarkLayer) -> None:
+        if layer.size_unit is Unit.PIXELS:
+            layer.size = min(layer.size, MAX_STAMP_SIZE)
         self.layers.append(layer)
         item = QListWidgetItem()
         item.setData(Qt.ItemDataRole.UserRole, layer.id)
@@ -1122,6 +1127,8 @@ class MainWindow(QMainWindow):
         if layer is None:
             return
         self._loading_controls = True
+        if layer.size_unit is Unit.PIXELS:
+            layer.size = min(layer.size, MAX_STAMP_SIZE)
         self.size_value.setText(str(round(layer.size)))
         self.size_unit.setCurrentIndex(0 if layer.size_unit is Unit.PERCENT else 1)
         self.opacity.setValue(layer.opacity)
@@ -1145,8 +1152,11 @@ class MainWindow(QMainWindow):
         layer = self.current_layer()
         if layer is None:
             return
-        layer.size = self._number(self.size_value)
         layer.size_unit = (Unit.PERCENT, Unit.PIXELS)[self.size_unit.currentIndex()]
+        layer.size = self._number(self.size_value)
+        if layer.size_unit is Unit.PIXELS and layer.size > MAX_STAMP_SIZE:
+            layer.size = MAX_STAMP_SIZE
+            self.size_value.setText(str(MAX_STAMP_SIZE))
         self.opacity_number.setText(str(self.opacity.value()))
         layer.opacity = self.opacity.value()
         layer.horizontal_inset = self._number(self.horizontal_value)
@@ -1226,7 +1236,11 @@ class MainWindow(QMainWindow):
         preview_size = min(preview_size[0], self.source.image.width), min(preview_size[1], self.source.image.height)
         base = self.source.image.resize(preview_size, Image.Resampling.LANCZOS)
         preview_layers = scaled_layers(self.layers, preview_size[0] / source_w)
-        rendered = render(base, preview_layers)
+        try:
+            rendered = render(base, preview_layers)
+        except RenderLimitError:
+            self.status.showMessage(self.t("水印设置超过限制"), 3000)
+            rendered = base
         pixmap = self._pixmap(rendered)
         self.preview.setPixmap(pixmap.scaled(self.preview.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
 
@@ -1389,7 +1403,7 @@ class MainWindow(QMainWindow):
         destination = self.settings.output_path or QFileDialog.getExistingDirectory(self, self.t("选择导出路径"))
         if not destination:
             return
-        self.worker = ExportWorker(self.paths, Path(destination), deepcopy(self.layers), replace(self.settings))
+        self.worker = ExportWorker(list(self.paths), Path(destination), deepcopy(self.layers), replace(self.settings))
         self.worker.progressed.connect(lambda current, total, name: self.status.showMessage(self.t("导出 {current}/{total}: {name}").format(current=current, total=total, name=name)))
         self.worker.finished_batch.connect(self.export_finished)
         self.worker.finished.connect(lambda current=self.worker: self._export_worker_finished(current))

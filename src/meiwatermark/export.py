@@ -15,7 +15,7 @@ class ExportWorker(QThread):
 
     def __init__(self, paths: list[Path], destination: Path, layers: list[WatermarkLayer], settings: ExportSettings) -> None:
         super().__init__()
-        self.paths, self.destination, self.layers, self.settings = paths, destination, layers, settings
+        self.paths, self.destination, self.layers, self.settings = list(paths), destination, layers, settings
         self._cancelled = False
 
     def cancel(self) -> None:

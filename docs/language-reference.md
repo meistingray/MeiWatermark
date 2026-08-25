@@ -46,6 +46,7 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 选择导出路径 | Choose Export Path | Elegir ruta de exportación | 書き出し先を選択 |
 | 预计文件大小 | Estimated File Size | Tamaño estimado | 推定ファイルサイズ |
 | 当前照片约 {size} | Current image: {size} | Imagen actual: {size} | 現在の画像: {size} |
+| 水印设置超过限制 | Watermark settings exceed the limit | La marca de agua supera el límite | 透かし設定が上限を超えています |
 | 没有图片 | No Images | No hay imágenes | 画像がありません |
 | 请先打开或拖入图片。 | Open or drag in images first. | Primero abre o arrastra imágenes. | 先に画像を開くかドラッグしてください。 |
 | 导出完成 | Export Complete | Exportación completada | 書き出し完了 |

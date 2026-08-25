@@ -10,7 +10,8 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QCheckBox, QDialog, QLabel, QPushButton, QRadioButton, QToolButton
 
-from meiwatermark.model import ExportSettings, LayerKind, ResizeMode, WatermarkLayer
+from meiwatermark.model import ExportSettings, LayerKind, ResizeMode, Unit, WatermarkLayer
+from meiwatermark.render import MAX_STAMP_SIZE
 from meiwatermark.presets import save_preset
 from meiwatermark.i18n import translate
 from meiwatermark.window import LayerDelegate, LayerList, MainWindow, ThumbnailDelegate, display_image_name
@@ -172,6 +173,66 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(window.opacity.value(), 80)
         self.assertEqual(window.rotation.value(), 0)
         self.assertEqual(window.quality.value(), 100)
+        window.close()
+
+    def test_pixel_watermark_size_is_limited_in_the_editor_and_on_add(self) -> None:
+        window = MainWindow()
+        layer = WatermarkLayer(LayerKind.TEXT, "text", size=MAX_STAMP_SIZE + 1, size_unit=Unit.PIXELS)
+        window.add_layer(layer)
+        self.assertEqual(layer.size, MAX_STAMP_SIZE)
+        self.assertEqual(window.size_value.text(), str(MAX_STAMP_SIZE))
+        window.size_value.setText(str(MAX_STAMP_SIZE + 1))
+        self.assertEqual(layer.size, MAX_STAMP_SIZE)
+        self.assertEqual(window.size_value.text(), str(MAX_STAMP_SIZE))
+        window.close()
+
+    def test_applying_preset_caps_pixel_watermark_size(self) -> None:
+        with TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}):
+            save_preset("large-pixel", [WatermarkLayer(LayerKind.TEXT, "text", size=MAX_STAMP_SIZE + 1, size_unit=Unit.PIXELS)], ExportSettings())
+            window = MainWindow()
+            window.apply_preset("large-pixel")
+            self.assertEqual(window.layers[0].size, MAX_STAMP_SIZE)
+            window.close()
+
+    def test_switching_back_to_a_cancelled_preview_keeps_the_latest_selection(self) -> None:
+        window = MainWindow()
+        first, second = Path("first.png"), Path("second.png")
+
+        class Loader:
+            path = first
+
+            def __init__(self) -> None:
+                self.cancelled = False
+
+            def cancel(self) -> None:
+                self.cancelled = True
+
+        loader = Loader()
+        window.preview_loader = loader  # type: ignore[assignment]
+        window.preview_pending = second
+        window._load_preview(first)
+        self.assertTrue(loader.cancelled)
+        self.assertEqual(window.preview_pending, first)
+        window.preview_loader = None
+        window.close()
+
+    def test_language_switch_clears_the_old_thumbnail_queue(self) -> None:
+        window = MainWindow()
+
+        class Loader:
+            def __init__(self) -> None:
+                self.cancelled = False
+
+            def cancel(self) -> None:
+                self.cancelled = True
+
+        loader = Loader()
+        window.thumbnail_loader = loader  # type: ignore[assignment]
+        window.thumbnail_queue = [Path("queued.png")]
+        window.set_language("en")
+        self.assertTrue(loader.cancelled)
+        self.assertFalse(window.thumbnail_queue)
+        window.thumbnail_loader = None
         window.close()
 
     def test_applying_preset_restores_all_export_controls(self) -> None:
