@@ -43,11 +43,9 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 约束数值 | Limit Value | Valor límite | 制限値 |
 | 不约束 / 最长边 / 最短边 / 比例 | No Limit / Long Edge / Short Edge / Scale | Sin límite / Lado largo / Lado corto / Escala | 制限なし / 長辺 / 短辺 / 倍率 |
 | 导出路径 | Export Path | Ruta de exportación | 書き出し先 |
-| 点击估算本批次文件大小 | Click to estimate the batch size | Haz clic para estimar el lote | クリックして一括サイズを推定 |
 | 选择导出路径 | Choose Export Path | Elegir ruta de exportación | 書き出し先を選択 |
 | 预计文件大小 | Estimated File Size | Tamaño estimado | 推定ファイルサイズ |
 | 当前照片约 {size} | Current image: {size} | Imagen actual: {size} | 現在の画像: {size} |
-| 本批次约 {minimum}–{maximum} | Batch: {minimum}–{maximum} | Lote: {minimum}–{maximum} | 一括: {minimum}～{maximum} |
 | 没有图片 | No Images | No hay imágenes | 画像がありません |
 | 请先打开或拖入图片。 | Open or drag in images first. | Primero abre o arrastra imágenes. | 先に画像を開くかドラッグしてください。 |
 | 导出完成 | Export Complete | Exportación completada | 書き出し完了 |

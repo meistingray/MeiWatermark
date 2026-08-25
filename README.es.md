@@ -24,7 +24,7 @@ Exporta lotes en JPEG, PNG y WebP con control de calidad, restricciones de tama�
 - **Vista previa en tiempo real**: revise el resultado mientras trabaja; importe imágenes arrastrándolas a cualquier zona de la ventana y la última imagen añadida se seleccionará y mostrará automáticamente.
 - **Gestión de fotos**: use `Delete`, el menú contextual o **Vaciar lista** para quitar fotos de la lista actual. Los archivos originales nunca se eliminan.
 - **Exportación por lotes**: JPEG, PNG y WebP; calidad predeterminada de 100 y límites opcionales por lado largo, lado corto o escala.
-- **Control de salida**: estima el tamaño de archivos individuales y del lote antes de exportar; permite conservar EXIF y perfiles ICC; admite rutas relativas a cada imagen original.
+- **Control de salida**: estima el tamaño del archivo de la imagen actual antes de exportar; permite conservar EXIF y perfiles ICC; admite rutas relativas a cada imagen original.
 - **Gestión de preajustes**: cada preajuste guarda las capas y la configuración de exportación en un archivo JSON independiente.
 - **Procesamiento local**: la lectura, vista previa y exportación se realizan localmente, sin servicios en la nube.
 - **Interfaz multilingüe**: chino simplificado, inglés, español y japonés.

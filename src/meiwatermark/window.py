@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import fields, replace
 from pathlib import Path
 
 from PIL import Image
@@ -206,6 +206,28 @@ class FontLoader(QThread):
         self.ready.emit(system_fonts(self.language))
 
 
+class ImageLoader(QThread):
+    ready = Signal(object, object)
+    failed = Signal(object, str)
+
+    def __init__(self, path: Path, max_size: tuple[int, int], preview: bool, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.path, self.max_size, self.preview = path, max_size, preview
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    def run(self) -> None:
+        try:
+            image = load_preview(self.path, self.max_size) if self.preview else load_thumbnail(self.path, self.max_size)
+            if not self._cancelled:
+                self.ready.emit(self.path, image)
+        except Exception as exc:  # noqa: BLE001
+            if not self._cancelled:
+                self.failed.emit(self.path, str(exc))
+
+
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
@@ -223,11 +245,10 @@ class MainWindow(QMainWindow):
         self.estimate_worker: EstimateWorker | None = None
         self._estimate_active_keys: set[tuple] = set()
         self._estimate_cache: dict[tuple, float | None] = {}
-        self._estimate_pending: str | None = None
-        self._batch_estimate_total: float | None = None
-        self._batch_estimate_context: tuple | None = None
-        self._batch_estimate_keys: list[tuple] = []
+        self._estimate_pending = False
         self.font_loaders: list[FontLoader] = []
+        self.thumbnail_loader: ImageLoader | None = None
+        self.thumbnail_queue: list[Path] = []
         self._loading_controls = False
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
@@ -274,7 +295,7 @@ class MainWindow(QMainWindow):
         self.quality.setValue(settings.quality)
         self.resize_mode.setCurrentIndex(list(ResizeMode).index(settings.resize_mode))
         self.resize_value.setText(str(round(settings.resize_value)) if settings.resize_value else "")
-        self.allow_upscale.setChecked(settings.allow_upscale)
+        self.allow_upscale.setChecked(not settings.allow_upscale)
         self.keep_exif.setChecked(settings.keep_exif)
         self.keep_icc.setChecked(settings.keep_icc)
         self.output_path.setText(settings.output_path)
@@ -360,8 +381,8 @@ class MainWindow(QMainWindow):
         properties = QVBoxLayout(controls)
         properties.setContentsMargins(7, 7, 7, 7)
         properties.setSpacing(8)
-        self.size_value, self.size_unit = self._number_unit(24, [self.t("百分比"), "px"])
-        properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 0, 100000), self.size_unit))
+        self.size_value, self.size_unit = self._number_unit(24, [self.t("百分比"), "px"], 1)
+        properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 1, 100000), self.size_unit))
         self.horizontal_value, self.horizontal_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
         self.horizontal_row = self._property_row(self.t("水平内嵌"), self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit)
         properties.addWidget(self.horizontal_row)
@@ -430,7 +451,6 @@ class MainWindow(QMainWindow):
         self.thumbnails.setWrapping(False)
         self.thumbnails.setIconSize(QSize(94, 70))
         self.thumbnails.setGridSize(QSize(108, 90))
-        self.thumbnails.setUniformItemSizes(True)
         self.thumbnails.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.thumbnails.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.thumbnails.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -468,6 +488,7 @@ class MainWindow(QMainWindow):
         self.resize_value_label = QLabel(f"{self.t('约束数值')} (px)")
         form.addRow(self.resize_value_label, self.resize_value)
         self.allow_upscale = QCheckBox(self.t("不放大"))
+        self.allow_upscale.setChecked(True)
         form.addRow(self.allow_upscale)
         self.keep_exif = QCheckBox(self.t("保留 EXIF"))
         self.keep_exif.setChecked(True)
@@ -490,16 +511,16 @@ class MainWindow(QMainWindow):
         output_row.addWidget(clear_output)
         layout.addLayout(output_row)
         layout.addWidget(self._line())
-        layout.addWidget(self._heading(self.t("预计文件大小")))
+        estimate_heading = self._heading(self.t("预计文件大小"))
+        estimate_heading.setIndent(0)
         self.current_estimate = QLabel(self.t("当前照片约 —"))
-        self.batch_estimate = QToolButton()
-        self.batch_estimate.setObjectName("batchEstimate")
-        self.batch_estimate.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        self.batch_estimate.setText(self.t("本批次约 —"))
-        self.batch_estimate.setToolTip(self.t("点击估算本批次文件大小"))
-        self.batch_estimate.clicked.connect(self.estimate_batch)
-        layout.addWidget(self.current_estimate)
-        layout.addWidget(self.batch_estimate)
+        self.current_estimate.setIndent(0)
+        estimate_layout = QVBoxLayout()
+        estimate_layout.setContentsMargins(0, 0, 0, 0)
+        estimate_layout.setSpacing(4)
+        estimate_layout.addWidget(estimate_heading)
+        estimate_layout.addWidget(self.current_estimate)
+        layout.addLayout(estimate_layout)
         self.export_button = QPushButton(self.t("导出"))
         self.export_button.setObjectName("primary")
         self.export_button.clicked.connect(self.export_batch)
@@ -651,8 +672,6 @@ class MainWindow(QMainWindow):
             QSlider::sub-page:horizontal {{ background: {ACCENT}; }}
             QSlider::handle:horizontal {{ width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background: {ACCENT}; }}
             QCheckBox::indicator:checked {{ background: {ACCENT}; border: 1px solid {ACCENT}; }}
-            QToolButton#batchEstimate {{ border: none; background: transparent; padding: 0; text-align: left; }}
-            QToolButton#batchEstimate:hover {{ color: {ACCENT}; }}
         """)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
@@ -673,22 +692,40 @@ class MainWindow(QMainWindow):
         if not added:
             return
         self.paths.extend(added)
-        self._clear_batch_estimate()
         last_item = None
         for path in added:
             item = QListWidgetItem(display_image_name(path))
             item.setData(Qt.ItemDataRole.UserRole, path)
-            try:
-                image = load_thumbnail(path, (240, 180))
-                item.setIcon(self._pixmap(image))
-            except Exception:  # noqa: BLE001
-                pass
             self.thumbnails.addItem(item)
+            self.thumbnail_queue.append(path)
             last_item = item
         if last_item is not None:
             self.thumbnails.setCurrentItem(last_item)
             self.thumbnails.scrollToItem(last_item, QAbstractItemView.ScrollHint.PositionAtCenter)
         self.status.showMessage(self.t("已导入 {count} 张图片").format(count=len(added)), 3000)
+        self._load_next_thumbnail()
+
+    def _load_next_thumbnail(self) -> None:
+        if self.thumbnail_loader is not None or not self.thumbnail_queue:
+            return
+        worker = ImageLoader(self.thumbnail_queue.pop(0), (240, 180), False, self)
+        self.thumbnail_loader = worker
+        worker.ready.connect(self._thumbnail_loaded)
+        worker.finished.connect(lambda current=worker: self._thumbnail_finished(current))
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+
+    def _thumbnail_loaded(self, path: Path, image: Image.Image) -> None:
+        for row in range(self.thumbnails.count()):
+            item = self.thumbnails.item(row)
+            if item.data(Qt.ItemDataRole.UserRole) == path:
+                item.setIcon(self._pixmap(image))
+                return
+
+    def _thumbnail_finished(self, worker: ImageLoader) -> None:
+        if self.thumbnail_loader is worker:
+            self.thumbnail_loader = None
+            self._load_next_thumbnail()
 
     def select_photo(self, row: int) -> None:
         if row < 0:
@@ -707,7 +744,6 @@ class MainWindow(QMainWindow):
             return
         item = self.thumbnails.takeItem(row)
         self.paths.remove(item.data(Qt.ItemDataRole.UserRole))
-        self._clear_batch_estimate()
         if self.thumbnails.count():
             self.thumbnails.setCurrentRow(min(row, self.thumbnails.count() - 1))
         else:
@@ -715,7 +751,6 @@ class MainWindow(QMainWindow):
             self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
             self.preview.setPixmap(QPixmap())
             self.current_estimate.setText(self.t("当前照片约 —"))
-            self.batch_estimate.setText(self.t("本批次约 —"))
 
     def eventFilter(self, watched, event):  # type: ignore[no-untyped-def]
         if watched in (self.thumbnails, self.thumbnails.viewport()) and event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Delete:
@@ -725,13 +760,11 @@ class MainWindow(QMainWindow):
 
     def clear_photo_list(self) -> None:
         self.paths.clear()
-        self._clear_batch_estimate()
         self.thumbnails.clear()
         self.source = None
         self.preview.setText(self.t("拖拽图片到窗口任意位置即可导入"))
         self.preview.setPixmap(QPixmap())
         self.current_estimate.setText(self.t("当前照片约 —"))
-        self.batch_estimate.setText(self.t("本批次约 —"))
 
     def show_thumbnail_menu(self, position) -> None:  # type: ignore[no-untyped-def]
         item = self.thumbnails.itemAt(position)
@@ -808,6 +841,7 @@ class MainWindow(QMainWindow):
         self.edit_layer(item)
 
     def edit_tiled_dialog(self, layer: WatermarkLayer, select_mode: bool = True) -> bool:
+        draft = deepcopy(layer)
         dialog = QDialog(self)
         dialog.setWindowTitle(self.t("全屏水印"))
         dialog.setMinimumWidth(420)
@@ -833,14 +867,14 @@ class MainWindow(QMainWindow):
                 button.setStyle(radio_style)
             button.setFixedSize(22, 26)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        selected_kind = [layer.kind if select_mode else None]
+        selected_kind = [draft.kind if select_mode else None]
         image_button = QPushButton(self.t("选择图片"))
         image_button.setObjectName("tileImage")
-        image_name = QLabel(Path(layer.image_path).name if layer.image_path else self.t("未选择"))
+        image_name = QLabel(Path(draft.image_path).name if draft.image_path else self.t("未选择"))
         image_name.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         text_button = QPushButton(self.t("编辑文字"))
         text_button.setObjectName("tileText")
-        text_name = QLabel(layer.text)
+        text_name = QLabel(draft.text)
         text_name.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         image_label = QLabel(self.t("使用图片"))
         image_label.setObjectName("tileImageLabel")
@@ -863,14 +897,14 @@ class MainWindow(QMainWindow):
         def choose_image() -> None:
             path, _ = QFileDialog.getOpenFileName(dialog, self.t("选择图片"), "", IMAGE_FILTER)
             if path:
-                layer.image_path = path
+                draft.image_path = path
                 image_name.setText(Path(path).name)
                 select(LayerKind.IMAGE)
 
         def edit_text() -> None:
             select(LayerKind.TEXT)
-            if self.edit_text_dialog(layer):
-                text_name.setText(layer.text)
+            if self.edit_text_dialog(draft):
+                text_name.setText(draft.text)
 
         image_mode.clicked.connect(lambda: select(LayerKind.IMAGE))
         text_mode.clicked.connect(lambda: select(LayerKind.TEXT))
@@ -878,7 +912,7 @@ class MainWindow(QMainWindow):
         text_button.clicked.connect(edit_text)
         if selected_kind[0] is not None:
             select(selected_kind[0])
-        gap = QLineEdit(str(round(layer.tile_gap)))
+        gap = QLineEdit(str(round(draft.tile_gap)))
         gap.setObjectName("tileGap")
         gap.setValidator(QIntValidator(0, 100000, dialog))
         gap.setFixedWidth(58)
@@ -895,7 +929,7 @@ class MainWindow(QMainWindow):
         stagger = QCheckBox()
         stagger.setObjectName("tileStagger")
         stagger.setFixedSize(22, 26)
-        stagger.setChecked(layer.tile_stagger)
+        stagger.setChecked(draft.tile_stagger)
         grid.addWidget(stagger, 3, 0, Qt.AlignmentFlag.AlignCenter)
         stagger_label = QLabel(self.t("错列"))
         stagger_label.setObjectName("tileStaggerLabel")
@@ -906,7 +940,7 @@ class MainWindow(QMainWindow):
             if selected_kind[0] is None:
                 QMessageBox.warning(dialog, self.t("全屏水印"), self.t("请选择图片或文字"))
                 return
-            if selected_kind[0] is LayerKind.IMAGE and not layer.image_path:
+            if selected_kind[0] is LayerKind.IMAGE and not draft.image_path:
                 QMessageBox.warning(dialog, self.t("全屏水印"), self.t("请选择图片"))
                 return
             dialog.accept()
@@ -916,11 +950,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return False
-        layer.kind = selected_kind[0]
-        layer.name = "全屏图片" if layer.kind is LayerKind.IMAGE else "全屏文字"
-        layer.tiled = True
-        layer.tile_gap = self._number(gap)
-        layer.tile_stagger = stagger.isChecked()
+        draft.kind = selected_kind[0]
+        draft.name = "全屏图片" if draft.kind is LayerKind.IMAGE else "全屏文字"
+        draft.tiled = True
+        draft.tile_gap = self._number(gap)
+        draft.tile_stagger = stagger.isChecked()
+        for attribute in fields(WatermarkLayer):
+            setattr(layer, attribute.name, getattr(draft, attribute.name))
         return True
 
     def edit_text_dialog(self, layer: WatermarkLayer) -> bool:
@@ -1078,7 +1114,10 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _number(field: QLineEdit) -> int:
-        return int(field.text() or 0)
+        try:
+            return int(field.text())
+        except ValueError:
+            return 0
 
     def set_anchor(self, anchor: Anchor) -> None:
         layer = self.current_layer()
@@ -1117,6 +1156,16 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         self.schedule_preview()
 
+    def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        workers = [worker for worker in (self.worker, self.estimate_worker, self.thumbnail_loader) if worker is not None]
+        workers.extend(self.font_loaders)
+        for worker in workers:
+            if worker.isRunning():
+                if hasattr(worker, "cancel"):
+                    worker.cancel()
+                worker.wait()
+        super().closeEvent(event)
+
     def refresh_preview(self) -> None:
         if self.source is None:
             return
@@ -1143,7 +1192,7 @@ class MainWindow(QMainWindow):
         modes = [ResizeMode.NONE, ResizeMode.LONG_EDGE, ResizeMode.SHORT_EDGE, ResizeMode.SCALE]
         self.settings = ExportSettings(
             format=self.format.currentText(), quality=self.quality.value(), resize_mode=modes[self.resize_mode.currentIndex()],
-            resize_value=float(self.resize_value.text() or 0), allow_upscale=self.allow_upscale.isChecked(), keep_exif=self.keep_exif.isChecked(), keep_icc=self.keep_icc.isChecked(), output_path=self.output_path.text().strip(),
+            resize_value=float(self.resize_value.text() or 0), allow_upscale=not self.allow_upscale.isChecked(), keep_exif=self.keep_exif.isChecked(), keep_icc=self.keep_icc.isChecked(), output_path=self.output_path.text().strip(),
         )
         self.schedule_preview()
         self.schedule_estimate()
@@ -1169,34 +1218,18 @@ class MainWindow(QMainWindow):
         key = self._estimate_key(selected)
         if key in self._estimate_cache or key in self._estimate_active_keys:
             return
-        self._start_estimate([(key, selected, self.source)], "current")
+        self._start_estimate((key, selected, self.source))
 
-    def estimate_batch(self) -> None:
-        if not self.paths:
-            return
-        context = self._estimate_context()
-        keys = [self._estimate_key(path) for path in self.paths]
-        self._batch_estimate_context = context
-        self._batch_estimate_keys = keys
-        missing = [
-            (key, path, self.source if path == self._selected_path() else None)
-            for key, path in zip(keys, self.paths)
-            if key not in self._estimate_cache
-        ]
-        if not missing:
-            self._finish_batch_estimate()
-            return
-        self._start_estimate(missing, "batch")
-
-    def _start_estimate(self, tasks: list[tuple[tuple, Path, object]], request: str) -> None:
+    def _start_estimate(self, task: tuple[tuple, Path, object]) -> None:
         if self.estimate_worker is not None and self.estimate_worker.isRunning():
             self.estimate_worker.cancel()
-            self._estimate_pending = request
+            self._estimate_pending = True
             return
-        worker = EstimateWorker(tasks, deepcopy(self.layers), replace(self.settings))
+        worker = EstimateWorker([task], deepcopy(self.layers), replace(self.settings))
         self.estimate_worker = worker
-        self._estimate_active_keys = {key for key, _, _ in tasks}
-        worker.completed.connect(self._store_estimates)
+        self._estimate_active_keys = {task[0]}
+        worker.estimated.connect(self._store_estimate)
+        worker.failed.connect(lambda key: self._store_estimate(key, None))
         worker.finished.connect(lambda current=worker: self._estimate_finished(current))
         worker.finished.connect(worker.deleteLater)
         worker.start()
@@ -1216,48 +1249,24 @@ class MainWindow(QMainWindow):
         item = self.thumbnails.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) if item is not None else None
 
-    def _estimate_context(self) -> tuple:
-        settings = self.settings
-        return (
-            settings.format, settings.quality, settings.resize_mode, settings.resize_value,
-            settings.allow_upscale, settings.keep_exif, settings.keep_icc, tuple(repr(layer) for layer in self.layers),
-        )
-
-    def _store_estimates(self, results: list[tuple[tuple, float | None]]) -> None:
-        self._estimate_cache.update(results)
+    def _store_estimate(self, key: tuple, estimated: float | None) -> None:
+        self._estimate_cache[key] = estimated
         self._refresh_estimate_labels()
 
     def _refresh_estimate_labels(self) -> None:
         selected = self._selected_path()
         current = self._estimate_cache.get(self._estimate_key(selected)) if selected is not None else None
         self.current_estimate.setText(self.t("当前照片约 {size}").format(size=self._bytes(current)) if current is not None else self.t("当前照片约 —"))
-        if self._batch_estimate_total is not None and self._batch_estimate_context == self._estimate_context():
-            total = self._batch_estimate_total
-            self.batch_estimate.setText(self.t("本批次约 {minimum}–{maximum}").format(minimum=self._bytes(total * 0.85), maximum=self._bytes(total * 1.15)))
-        else:
-            self.batch_estimate.setText(self.t("本批次约 —"))
 
     def _estimate_finished(self, worker: EstimateWorker) -> None:
         if self.estimate_worker is not worker:
             return
         self.estimate_worker = None
         self._estimate_active_keys.clear()
-        if self._batch_estimate_context == self._estimate_context() and self._batch_estimate_keys:
-            self._finish_batch_estimate()
         self._refresh_estimate_labels()
         if self._estimate_pending:
-            pending, self._estimate_pending = self._estimate_pending, None
-            (self.estimate_batch if pending == "batch" else self.update_estimate)()
-
-    def _finish_batch_estimate(self) -> None:
-        values = [self._estimate_cache.get(key) for key in self._batch_estimate_keys]
-        self._batch_estimate_total = sum(value for value in values if value is not None) if values and all(value is not None for value in values) else None
-        self._refresh_estimate_labels()
-
-    def _clear_batch_estimate(self) -> None:
-        self._batch_estimate_total = None
-        self._batch_estimate_context = None
-        self._batch_estimate_keys = []
+            self._estimate_pending = False
+            self.update_estimate()
 
     @staticmethod
     def _bytes(value: float) -> str:
@@ -1317,7 +1326,7 @@ class MainWindow(QMainWindow):
         self.quality.setValue(settings.quality)
         self.resize_mode.setCurrentIndex(list(ResizeMode).index(settings.resize_mode))
         self.resize_value.setText(str(round(settings.resize_value)) if settings.resize_value else "")
-        self.allow_upscale.setChecked(settings.allow_upscale)
+        self.allow_upscale.setChecked(not settings.allow_upscale)
         self.keep_exif.setChecked(settings.keep_exif)
         self.keep_icc.setChecked(settings.keep_icc)
         self.output_path.setText(settings.output_path)

@@ -24,7 +24,7 @@ Batch export to JPEG, PNG, and WebP with quality control, resize constraints, fi
 - **Live preview**: review the result as you work; drag images anywhere into the window, with the newest imported image selected and brought into view automatically.
 - **Photo list management**: use the Delete key, the context menu, or Clear List to remove photos from the current list. Original files are never deleted.
 - **Batch export**: JPEG, PNG, and WebP support; quality defaults to 100, with optional long-edge, short-edge, or scale-based resize limits.
-- **Output control**: estimate individual and batch file sizes before export; retain EXIF and ICC profiles when needed; support paths relative to each original image.
+- **Output control**: estimate the current image file size before export; retain EXIF and ICC profiles when needed; support paths relative to each original image.
 - **Preset management**: each preset stores both watermark layers and export settings in a separate JSON file for easy backup, sharing, or cleanup.
 - **Local processing**: image loading, previewing, and export are performed locally without a cloud service.
 - **Multilingual interface**: Simplified Chinese, English, Spanish, and Japanese are included.

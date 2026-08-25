@@ -134,6 +134,16 @@ class RenderTests(unittest.TestCase):
         self.assertLessEqual(thumbnail.width, 60)
         self.assertLessEqual(thumbnail.height, 40)
 
+    def test_rotated_preview_stays_within_the_requested_bounds(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "rotated.jpg"
+            exif = Image.Exif()
+            exif[274] = 6
+            Image.new("RGB", (600, 300), "white").save(path, exif=exif)
+            preview = load_preview(path, (100, 80))
+        self.assertLessEqual(preview.image.width, 100)
+        self.assertLessEqual(preview.image.height, 80)
+
     def test_jpeg_estimate_uses_export_encoding_options(self) -> None:
         with TemporaryDirectory() as directory:
             path = Path(directory) / "source.jpg"

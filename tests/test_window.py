@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from PIL import Image
-from PySide6.QtCore import QEventLoop, QPoint, Qt, QTimer
+from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QCheckBox, QDialog, QLabel, QPushButton, QRadioButton, QToolButton
@@ -27,6 +27,7 @@ class WindowTests(unittest.TestCase):
     def test_thumbnail_selection_has_no_native_focus_outline(self) -> None:
         window = MainWindow()
         self.assertIsInstance(window.thumbnails.itemDelegate(), ThumbnailDelegate)
+        self.assertFalse(window.thumbnails.uniformItemSizes())
         self.assertIsInstance(window.layer_list.itemDelegate(), LayerDelegate)
         window.close()
 
@@ -171,11 +172,20 @@ class WindowTests(unittest.TestCase):
             window = MainWindow()
             window.apply_preset("full-export")
             self.assertEqual(window.resize_value.text(), "63")
-            self.assertTrue(window.allow_upscale.isChecked())
+            self.assertFalse(window.allow_upscale.isChecked())
             self.assertFalse(window.keep_exif.isChecked())
             self.assertFalse(window.keep_icc.isChecked())
             self.assertEqual(window.output_path.text(), "/Mei")
             window.close()
+
+    def test_do_not_upscale_checkbox_matches_export_setting(self) -> None:
+        window = MainWindow()
+        self.assertTrue(window.allow_upscale.isChecked())
+        window.update_export_settings()
+        self.assertFalse(window.settings.allow_upscale)
+        window.allow_upscale.setChecked(False)
+        self.assertTrue(window.settings.allow_upscale)
+        window.close()
 
     def test_export_uses_a_deep_copied_layer_snapshot(self) -> None:
         with patch("meiwatermark.window.ExportWorker") as worker_class:
@@ -220,7 +230,7 @@ class WindowTests(unittest.TestCase):
             self.assertEqual(window.thumbnails.currentItem().data(Qt.ItemDataRole.UserRole), latest)
             window.close()
 
-    def test_switching_photo_changes_only_the_current_estimate(self) -> None:
+    def test_switching_photo_changes_the_current_estimate(self) -> None:
         with TemporaryDirectory() as directory:
             first, second = Path(directory) / "first.png", Path(directory) / "second.png"
             Image.new("RGB", (12, 12), "white").save(first)
@@ -230,31 +240,9 @@ class WindowTests(unittest.TestCase):
             window._estimate_cache[window._estimate_key(first)] = 1024 * 1024
             window._estimate_cache[window._estimate_key(second)] = 2 * 1024 * 1024
             window._refresh_estimate_labels()
-            batch = window.batch_estimate.text()
             self.assertIn("2.0 MB", window.current_estimate.text())
             window.thumbnails.setCurrentRow(0)
             self.assertIn("1.0 MB", window.current_estimate.text())
-            self.assertEqual(window.batch_estimate.text(), batch)
-            window.close()
-
-    def test_completed_batch_estimate_stays_fixed_when_selection_changes(self) -> None:
-        with TemporaryDirectory() as directory:
-            first, second = Path(directory) / "first.png", Path(directory) / "second.png"
-            Image.new("RGB", (400, 300), "white").save(first)
-            Image.effect_noise((400, 300), 100).convert("RGB").save(second)
-            window = MainWindow()
-            window.add_paths([first, second])
-            window.estimate_timer.stop()
-            window.estimate_batch()
-            loop = QEventLoop()
-            window.estimate_worker.finished.connect(loop.quit)
-            QTimer.singleShot(5000, loop.quit)
-            loop.exec()
-            batch = window.batch_estimate.text()
-            current = window.current_estimate.text()
-            window.thumbnails.setCurrentRow(0)
-            self.assertNotEqual(window.current_estimate.text(), current)
-            self.assertEqual(window.batch_estimate.text(), batch)
             window.close()
 
 

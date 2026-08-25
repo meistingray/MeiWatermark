@@ -44,8 +44,8 @@ def load_preview(path: str | Path, max_size: tuple[int, int]) -> ImageSource:
         orientation = opened.getexif().get(274)
         original_size = (opened.height, opened.width) if orientation in (5, 6, 7, 8) else opened.size
         opened.draft("RGB", max_size)
-        opened.thumbnail(max_size, Image.Resampling.LANCZOS)
         normalized = ImageOps.exif_transpose(opened)
+        normalized.thumbnail(max_size, Image.Resampling.LANCZOS)
         exif = normalized.getexif().tobytes() or None
         return ImageSource(normalized.convert("RGBA"), exif, opened.info.get("icc_profile"), original_size)
 
@@ -249,13 +249,11 @@ def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
     return stamp
 
 
-@lru_cache(maxsize=16)
 def _watermark_image(path: str, modified: int) -> Image.Image:
     with Image.open(path) as opened:
         return ImageOps.exif_transpose(opened).convert("RGBA")
 
 
-@lru_cache(maxsize=16)
 def _resized_watermark(path: str, modified: int, target_size: int) -> Image.Image:
     stamp = _watermark_image(path, modified)
     scale = target_size / max(stamp.width, stamp.height)
@@ -314,6 +312,8 @@ def render(base: Image.Image, layers: list[WatermarkLayer]) -> Image.Image:
         if not layer.visible:
             continue
         size = _size_pixels(layer, *result.size)
+        if layer.tiled:
+            size = max(8, size)
         stamp = _image_stamp(layer, size) if layer.kind is LayerKind.IMAGE else _text_stamp(layer, size)
         if stamp is None:
             continue

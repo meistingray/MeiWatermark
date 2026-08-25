@@ -48,7 +48,6 @@ class ExportWorker(QThread):
 class EstimateWorker(QThread):
     estimated = Signal(object, float)
     failed = Signal(object)
-    completed = Signal(object)
 
     def __init__(self, tasks: list[tuple[tuple, Path, ImageSource | None]], layers: list[WatermarkLayer], settings: ExportSettings) -> None:
         super().__init__()
@@ -59,7 +58,6 @@ class EstimateWorker(QThread):
         self._cancelled = True
 
     def run(self) -> None:
-        results = []
         for key, path, loaded in self.tasks:
             if self._cancelled:
                 return
@@ -71,8 +69,5 @@ class EstimateWorker(QThread):
                 estimated = estimate_size(sample, replace(self.settings, resize_mode=ResizeMode.NONE), source)
                 estimated *= (output_size[0] * output_size[1]) / max(1, sample.width * sample.height)
                 self.estimated.emit(key, estimated)
-                results.append((key, estimated))
             except Exception:  # noqa: BLE001
                 self.failed.emit(key)
-                results.append((key, None))
-        self.completed.emit(results)

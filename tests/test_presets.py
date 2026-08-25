@@ -35,6 +35,13 @@ class PresetTests(unittest.TestCase):
         with TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}):
             self.assertEqual(preset_directory(), Path(directory) / "MeiWatermark")
 
+    def test_invalid_export_format_is_ignored(self) -> None:
+        with TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}):
+            path = Path(directory) / "MeiWatermark" / "invalid.json"
+            path.parent.mkdir()
+            path.write_text('{"layers": [], "export": {"format": "TIFF", "resize_mode": "none"}}', encoding="utf-8")
+            self.assertNotIn("invalid", load_presets())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -45,6 +45,8 @@ def load_presets() -> dict[str, tuple[list[WatermarkLayer], ExportSettings]]:
         try:
             layers = [WatermarkLayer(**{**item, "kind": LayerKind(item["kind"]), "size_unit": Unit(item["size_unit"]), "horizontal_unit": Unit(item["horizontal_unit"]), "vertical_unit": Unit(item["vertical_unit"]), "anchor": Anchor(item["anchor"])}) for item in values["layers"]]
             settings = ExportSettings(**{**values["export"], "resize_mode": ResizeMode(values["export"]["resize_mode"])})
+            if settings.format not in {"JPEG", "PNG", "WEBP"}:
+                continue
             result[path.stem] = layers, settings
         except (KeyError, TypeError, ValueError):
             continue
