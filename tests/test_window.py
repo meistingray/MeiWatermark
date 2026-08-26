@@ -95,6 +95,14 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(len(set(state["label_x"])), 1)
         window.close()
 
+    def test_closing_text_dialog_after_font_loader_finishes(self) -> None:
+        window = MainWindow()
+        layer = WatermarkLayer(LayerKind.TEXT, "text")
+        with patch("meiwatermark.window.system_fonts", return_value=[]):
+            QTimer.singleShot(100, lambda: self.app.activeModalWidget().reject())
+            self.assertFalse(window.edit_text_dialog(layer))
+        window.close()
+
     def test_layer_list_uses_the_row_mouse_position_for_drag_preview(self) -> None:
         layer_list = LayerList()
         preview = QPixmap(20, 20)

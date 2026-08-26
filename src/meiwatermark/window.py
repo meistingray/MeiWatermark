@@ -1112,8 +1112,9 @@ class MainWindow(QMainWindow):
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
         result = dialog.exec()
-        loader.cancel()
-        loader.ready.disconnect(populate_fonts)
+        if loader in self.font_loaders:
+            loader.cancel()
+            loader.ready.disconnect(populate_fonts)
         if result != QDialog.DialogCode.Accepted or not text.text().strip():
             dialog.deleteLater()
             return False
