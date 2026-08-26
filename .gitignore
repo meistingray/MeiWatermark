@@ -7,5 +7,6 @@ build/
 build-*/
 dist/
 *.spec
+!MeiWatermark.spec
 __pycache__/
 *.egg-info/

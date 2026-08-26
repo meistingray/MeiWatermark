@@ -55,6 +55,15 @@ class RenderTests(unittest.TestCase):
         self.assertGreater(result.getpixel((0, 0))[0], 0)
         self.assertGreater(result.getpixel((24, 24))[0], 0)
 
+    def test_tiled_watermark_preserves_opacity_on_transparent_base(self) -> None:
+        base = Image.new("RGBA", (60, 60))
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "white.png"
+            Image.new("RGBA", (20, 20), (255, 255, 255, 255)).save(path)
+            layer = WatermarkLayer(LayerKind.IMAGE, "tile", image_path=str(path), size=20, size_unit=Unit.PIXELS, opacity=50, tiled=True, tile_gap=0, tile_stagger=False)
+            result = render(base, [layer])
+        self.assertEqual(result.getpixel((10, 10)), (255, 255, 255, 127))
+
     def test_image_stamp_reuses_the_resized_watermark(self) -> None:
         _resized_watermark.cache_clear()
         with TemporaryDirectory() as directory:
@@ -65,7 +74,7 @@ class RenderTests(unittest.TestCase):
             second = _image_stamp(layer, 96)
         self.assertIs(first, second)
         self.assertEqual(_resized_watermark.cache_info().hits, 1)
-        self.assertEqual(_resized_watermark.cache_info().maxsize, 1)
+        self.assertEqual(_resized_watermark.cache_info().maxsize, 8)
 
     def test_render_does_not_modify_its_input_image(self) -> None:
         base = Image.new("RGBA", (20, 20), "black")
@@ -194,6 +203,20 @@ class RenderTests(unittest.TestCase):
             estimated = estimate_size(source.image, settings, source)
             save_image(source.image, target, settings, source)
             self.assertEqual(estimated, target.stat().st_size)
+
+    def test_jpeg_export_flattens_transparency_to_white(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "transparent.png"
+            target = Path(directory) / "target.jpg"
+            image = Image.new("RGBA", (20, 20))
+            image.paste((255, 0, 0, 255), (5, 5, 15, 15))
+            image.save(path)
+            source = load_image(path)
+            settings = ExportSettings(format="JPEG", quality=100)
+            save_image(render(source.image, []), target, settings, source)
+            result = Image.open(target).convert("RGB")
+        self.assertEqual(result.getpixel((0, 0)), (255, 255, 255))
+        self.assertGreater(result.getpixel((10, 10))[0], 200)
 
 
 if __name__ == "__main__":

@@ -256,7 +256,7 @@ def _text_stamp(layer: WatermarkLayer, target_size: int) -> Image.Image:
     return stamp
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=8)
 def _resized_watermark(path: str, modified: int, file_size: int, target_size: int) -> Image.Image:
     with Image.open(path) as opened:
         stamp = ImageOps.exif_transpose(opened).convert("RGBA")
@@ -318,7 +318,7 @@ def _tile(result: Image.Image, stamp: Image.Image, layer: WatermarkLayer) -> Non
     for row, y in enumerate(range(-step_y, result.height + step_y, step_y)):
         offset = step_x // 2 if layer.tile_stagger and row % 2 else 0
         for x in range(-step_x + offset, result.width + step_x, step_x):
-            result.paste(stamp, (x, y), stamp)
+            result.alpha_composite(stamp, (x, y))
 
 
 def render(base: Image.Image, layers: list[WatermarkLayer]) -> Image.Image:
@@ -365,6 +365,14 @@ def resize_for_export(image: Image.Image, settings: ExportSettings) -> Image.Ima
     return image.resize(target_size, Image.Resampling.LANCZOS)
 
 
+def _flatten_rgba(image: Image.Image) -> Image.Image:
+    if "A" not in image.getbands():
+        return image.convert("RGB")
+    background = Image.new("RGB", image.size, (255, 255, 255))
+    background.paste(image, mask=image.getchannel("A"))
+    return background
+
+
 def save_image(image: Image.Image, destination: str | Path, settings: ExportSettings, source: ImageSource | None = None) -> None:
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -376,7 +384,7 @@ def save_image(image: Image.Image, destination: str | Path, settings: ExportSett
         options["icc_profile"] = source.icc_profile
     if fmt == "JPEG":
         options.update(quality=settings.quality, optimize=True, progressive=True, subsampling="4:2:0")
-        image.convert("RGB").save(destination, fmt, **options)
+        _flatten_rgba(image).save(destination, fmt, **options)
     elif fmt == "WEBP":
         options.update(quality=settings.quality, method=4)
         image.save(destination, fmt, **options)
@@ -396,7 +404,7 @@ def estimate_size(image: Image.Image, settings: ExportSettings, source: ImageSou
         options["icc_profile"] = source.icc_profile
     if fmt == "JPEG":
         options.update(quality=settings.quality, optimize=True, progressive=True, subsampling="4:2:0")
-        preview.convert("RGB").save(buffer, fmt, **options)
+        _flatten_rgba(preview).save(buffer, fmt, **options)
     elif fmt == "WEBP":
         options.update(quality=settings.quality, method=4)
         preview.save(buffer, fmt, **options)

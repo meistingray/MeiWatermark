@@ -194,6 +194,17 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(window.resize_value.geometry(), px_geometry)
         window.close()
 
+    def test_switching_resize_modes_keeps_the_value_within_the_same_unit(self) -> None:
+        window = MainWindow()
+        window.resize_mode.setCurrentIndex(1)
+        self.assertEqual(window.resize_value.text(), "2048")
+        window.resize_value.setText("3000")
+        window.resize_mode.setCurrentIndex(2)
+        self.assertEqual(window.resize_value.text(), "3000")
+        window.resize_mode.setCurrentIndex(3)
+        self.assertEqual(window.resize_value.text(), "100")
+        window.close()
+
     def test_pixel_watermark_size_is_limited_in_the_editor_and_on_add(self) -> None:
         window = MainWindow()
         layer = WatermarkLayer(LayerKind.TEXT, "text", size=MAX_STAMP_SIZE + 1, size_unit=Unit.PIXELS)

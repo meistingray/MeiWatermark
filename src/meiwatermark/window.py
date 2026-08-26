@@ -201,9 +201,15 @@ class FontLoader(QThread):
     def __init__(self, language: str, parent: QWidget) -> None:
         super().__init__(parent)
         self.language = language
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
 
     def run(self) -> None:
-        self.ready.emit(system_fonts(self.language))
+        fonts = system_fonts(self.language)
+        if not self._cancelled:
+            self.ready.emit(fonts)
 
 
 class ImageLoader(QThread):
@@ -253,6 +259,7 @@ class MainWindow(QMainWindow):
         self.thumbnail_loader: ImageLoader | None = None
         self.thumbnail_queue: list[Path] = []
         self._loading_controls = False
+        self._resize_ratio = False
         self.preview_timer = QTimer(self)
         self.preview_timer.setSingleShot(True)
         self.preview_timer.timeout.connect(self.refresh_preview)
@@ -388,7 +395,7 @@ class MainWindow(QMainWindow):
         properties.setContentsMargins(7, 7, 7, 7)
         properties.setSpacing(8)
         self.size_value, self.size_unit = self._number_unit(24, [self.t("百分比"), "px"], 1)
-        properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 1, MAX_STAMP_SIZE), self.size_unit))
+        properties.addWidget(self._property_row(self.t("大小"), self._stepper(self.size_value, 1, 100000), self.size_unit))
         self.horizontal_value, self.horizontal_unit = self._number_unit(2, [self.t("视觉比例"), self.t("百分比"), "px"], -100000)
         self.horizontal_row = self._property_row(self.t("水平内嵌"), self._stepper(self.horizontal_value, -100000, 100000), self.horizontal_unit)
         properties.addWidget(self.horizontal_row)
@@ -1007,6 +1014,7 @@ class MainWindow(QMainWindow):
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
+            dialog.deleteLater()
             return False
         draft.kind = selected_kind[0]
         draft.name = "全屏图片" if draft.kind is LayerKind.IMAGE else "全屏文字"
@@ -1015,6 +1023,7 @@ class MainWindow(QMainWindow):
         draft.tile_stagger = stagger.isChecked()
         for attribute in fields(WatermarkLayer):
             setattr(layer, attribute.name, getattr(draft, attribute.name))
+        dialog.deleteLater()
         return True
 
     def edit_text_dialog(self, layer: WatermarkLayer) -> bool:
@@ -1102,7 +1111,11 @@ class MainWindow(QMainWindow):
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         form.addRow(buttons)
-        if dialog.exec() != QDialog.DialogCode.Accepted or not text.text().strip():
+        result = dialog.exec()
+        loader.cancel()
+        loader.ready.disconnect(populate_fonts)
+        if result != QDialog.DialogCode.Accepted or not text.text().strip():
+            dialog.deleteLater()
             return False
         layer.text = text.text().strip()
         choice = weight.currentData()
@@ -1112,6 +1125,7 @@ class MainWindow(QMainWindow):
         layer.color = None if text_none.isChecked() else tuple(text_color.property("color").getRgb()[:3])
         layer.stroke_color = None if stroke_none.isChecked() else tuple(stroke_color.property("color").getRgb()[:3])
         layer.stroke_width = int(stroke_width.text() or 0)
+        dialog.deleteLater()
         return True
 
     def current_layer(self) -> WatermarkLayer | None:
@@ -1207,9 +1221,10 @@ class MainWindow(QMainWindow):
         self.preview_timer.start(30)
 
     def schedule_estimate(self) -> None:
-        self._refresh_estimate_labels()
         selected = self._selected_path()
-        if self.source is None or selected is None or self.source_path != selected or self._estimate_key(selected) in self._estimate_cache:
+        key = self._estimate_key(selected) if selected is not None else None
+        self._refresh_estimate_labels(key)
+        if self.source is None or selected is None or self.source_path != selected or key in self._estimate_cache:
             return
         self.estimate_timer.start(1000)
 
@@ -1219,8 +1234,13 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
         workers = [worker for worker in (self.worker, self.estimate_worker, self.preview_loader, self.thumbnail_loader) if worker is not None]
-        workers.extend(self.font_loaders)
         active = [worker for worker in workers if worker.isRunning()]
+        # Font loaders are pure background reads; cancel and detach them so a
+        # slow font enumeration does not block closing the window.
+        for loader in list(self.font_loaders):
+            loader.cancel()
+            loader.setParent(None)
+            self.font_loaders.remove(loader)
         if active:
             for worker in active:
                 if hasattr(worker, "cancel"):
@@ -1233,7 +1253,8 @@ class MainWindow(QMainWindow):
     def refresh_preview(self) -> None:
         if self.source is None:
             return
-        viewport = self.preview.size() * self.devicePixelRatioF()
+        dpr = self.devicePixelRatioF()
+        viewport = self.preview.size() * dpr
         target_w, target_h = max(1, round(viewport.width())), max(1, round(viewport.height()))
         source_w, source_h = self.source.original_size
         scale = min(target_w / source_w, target_h / source_h, 1)
@@ -1247,7 +1268,9 @@ class MainWindow(QMainWindow):
             self.status.showMessage(self.t("水印设置超过限制"), 3000)
             rendered = base
         pixmap = self._pixmap(rendered)
-        self.preview.setPixmap(pixmap.scaled(self.preview.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        pixmap = pixmap.scaled(viewport, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        pixmap.setDevicePixelRatio(dpr)
+        self.preview.setPixmap(pixmap)
 
     def _pixmap(self, image: Image.Image) -> QPixmap:
         rgba = image.convert("RGBA")
@@ -1269,7 +1292,11 @@ class MainWindow(QMainWindow):
         index = self.resize_mode.currentIndex()
         ratio = index == 3
         self.resize_value_label.setText(f"{self.t('约束数值')} ({'%' if ratio else 'px'})")
-        self.resize_value.setText("" if index == 0 else "100" if ratio else "2048")
+        if index == 0:
+            self.resize_value.setText("")
+        elif not self.resize_value.text().strip() or ratio != self._resize_ratio:
+            self.resize_value.setText("100" if ratio else "2048")
+        self._resize_ratio = ratio
         self.update_export_settings()
 
     def select_output_path(self) -> None:
@@ -1319,9 +1346,11 @@ class MainWindow(QMainWindow):
         self._estimate_cache[key] = estimated
         self._refresh_estimate_labels()
 
-    def _refresh_estimate_labels(self) -> None:
-        selected = self._selected_path()
-        current = self._estimate_cache.get(self._estimate_key(selected)) if selected is not None else None
+    def _refresh_estimate_labels(self, key: tuple | None = None) -> None:
+        if key is None:
+            selected = self._selected_path()
+            key = self._estimate_key(selected) if selected is not None else None
+        current = self._estimate_cache.get(key) if key is not None else None
         self.current_estimate.setText(self.t("当前照片约 {size}").format(size=self._bytes(current)) if current is not None else self.t("当前照片约 —"))
 
     def _estimate_finished(self, worker: EstimateWorker) -> None:
@@ -1336,7 +1365,9 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _bytes(value: float) -> str:
-        return f"{value / 1024 / 1024:.1f} MB"
+        if value >= 1024 * 1024:
+            return f"{value / 1024 / 1024:.1f} MB"
+        return f"{value / 1024:.0f} KB"
 
     def save_preset(self) -> None:
         name_dialog = QInputDialog(self)
