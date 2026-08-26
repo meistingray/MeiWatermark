@@ -8,7 +8,7 @@
   <strong>简体中文</strong> · <a href="README.en.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a>
 </p>
 
-MeiWatermark 是一款开源桌面批处理水印工具，支持多图层水印，与跨尺寸图片的一致视觉比例和定位。
+MeiWatermark 是一款便携、本地运行的 Windows 批量图片水印工具，支持图片水印、文字水印、平铺水印、多图层和批量导出。
 
 可叠加、排序图片和文字水印，提供九宫格定位、内嵌边距、透明度、旋转及文字描边等控制，并支持保存为预设。
 

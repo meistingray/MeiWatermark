@@ -8,7 +8,7 @@
   <a href="README.md">简体中文</a> · <strong>English</strong> · <a href="README.es.md">Español</a> · <a href="README.ja.md">日本語</a>
 </p>
 
-MeiWatermark is an open-source desktop batch watermarking tool that supports multi-layer watermarks with consistent visual scale and positioning across images of different sizes.
+MeiWatermark is a portable, local Windows batch image watermarking tool that supports image, text, and tiled watermarks, multiple layers, and batch export.
 
 Layer and arrange image and text watermarks with nine-grid positioning, inset margins, opacity, rotation, text outlines, and reusable presets.
 

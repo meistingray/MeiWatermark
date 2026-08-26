@@ -8,7 +8,7 @@
   <a href="README.md">简体中文</a> · <a href="README.en.md">English</a> · <strong>Español</strong> · <a href="README.ja.md">日本語</a>
 </p>
 
-MeiWatermark es una herramienta de escritorio de código abierto para aplicar marcas de agua por lotes, con capas múltiples y una escala visual y posición coherentes entre imágenes de distintos tamaños.
+MeiWatermark es una herramienta portátil y local para aplicar marcas de agua por lotes a imágenes en Windows; admite marcas de agua de imagen, texto y mosaico, múltiples capas y exportación por lotes.
 
 Permite superponer y ordenar marcas de agua de imagen y texto, con posicionamiento por cuadrícula de nueve puntos, márgenes internos, opacidad, rotación, contornos de texto y ajustes preestablecidos reutilizables.
 
