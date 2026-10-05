@@ -11,6 +11,13 @@ from meiwatermark.presets import load_presets, preset_directory, preset_exists, 
 
 
 class PresetTests(unittest.TestCase):
+    def test_size_limit_round_trips_and_old_presets_default_to_unlimited(self) -> None:
+        with TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}):
+            save_preset("limited", [], ExportSettings(max_size_kb=500))
+            self.assertEqual(load_presets()["limited"][1].max_size_kb, 500)
+            (preset_directory() / "old.json").write_text('{"layers": [], "export": {"format": "JPEG", "resize_mode": "none"}}', encoding="utf-8")
+            self.assertEqual(load_presets()["old"][1].max_size_kb, 0)
+
     def test_combined_preset_stores_layers_and_export_settings(self) -> None:
         with TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}):
             export = ExportSettings(format="PNG", quality=92, resize_mode=ResizeMode.SCALE, resize_value=63, allow_upscale=True, keep_exif=False, keep_icc=False, output_path="/Mei")

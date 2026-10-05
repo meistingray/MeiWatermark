@@ -373,42 +373,75 @@ def _flatten_rgba(image: Image.Image) -> Image.Image:
     return background
 
 
-def save_image(image: Image.Image, destination: str | Path, settings: ExportSettings, source: ImageSource | None = None) -> None:
-    destination = Path(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
+class OutputSizeLimitError(ValueError):
+    """Even the smallest image and retained metadata exceed the byte limit."""
+
+
+def encode_image(image: Image.Image, settings: ExportSettings, source: ImageSource | None = None) -> bytes:
+    """Encode once for both export and estimation; include retained metadata in the limit."""
     fmt = settings.format.upper()
     options: dict[str, object] = {}
     if source and settings.keep_exif and source.exif:
         options["exif"] = source.exif
     if source and settings.keep_icc and source.icc_profile:
         options["icc_profile"] = source.icc_profile
-    if fmt == "JPEG":
-        options.update(quality=settings.quality, optimize=True, progressive=True, subsampling="4:2:0")
-        _flatten_rgba(image).save(destination, fmt, **options)
-    elif fmt == "WEBP":
-        options.update(quality=settings.quality, method=4)
-        image.save(destination, fmt, **options)
-    else:
-        options["compress_level"] = round((100 - settings.quality) * 9 / 100)
-        image.save(destination, "PNG", **options)
+    prepared = _flatten_rgba(image) if fmt == "JPEG" else image
+    limit = max(0, settings.max_size_kb) * 1024
+
+    def encode(quality: int) -> bytes:
+        buffer = BytesIO()
+        encoding = dict(options)
+        if fmt == "JPEG":
+            encoding.update(quality=quality, optimize=True, progressive=True, subsampling="4:2:0")
+        elif fmt == "WEBP":
+            encoding.update(quality=quality, method=4)
+        else:
+            encoding["compress_level"] = 9 if limit else round((100 - quality) * 9 / 100)
+            if limit:
+                encoding["optimize"] = True
+        prepared.save(buffer, fmt, **encoding)
+        return buffer.getvalue()
+
+    quality = max(1, min(100, settings.quality))
+    original = prepared
+    while True:
+        result = encode(quality)
+        if not limit or len(result) <= limit:
+            return result
+        if fmt in {"JPEG", "WEBP"} and quality > 1:
+            result = encode(1)
+            if len(result) <= limit:
+                # Search within the user's quality ceiling, retaining only verified fits.
+                low, high = 2, quality - 1
+                while low <= high:
+                    candidate_quality = (low + high) // 2
+                    candidate = encode(candidate_quality)
+                    if len(candidate) <= limit:
+                        result = candidate
+                        low = candidate_quality + 1
+                    else:
+                        high = candidate_quality - 1
+                return result
+        if prepared.size == (1, 1):
+            break
+        # Dimensions are upper bounds too. Reduce them only after compression
+        # cannot meet the byte limit; resample the original to avoid cumulative blur.
+        scale = min(0.8, (limit / len(result)) ** 0.5 * 0.9)
+        target = (max(1, int(prepared.width * scale)), max(1, int(prepared.height * scale)))
+        prepared = original.resize(target, Image.Resampling.LANCZOS)
+    raise OutputSizeLimitError(
+        f"{settings.max_size_kb} KB ({limit} bytes); "
+        f"{image.width} × {image.height} px"
+    )
+
+
+def save_image(image: Image.Image, destination: str | Path, settings: ExportSettings, source: ImageSource | None = None) -> None:
+    data = encode_image(image, settings, source)
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(data)
 
 
 def estimate_size(image: Image.Image, settings: ExportSettings, source: ImageSource | None = None) -> int:
-    buffer = BytesIO()
     preview = resize_for_export(image, settings)
-    fmt = settings.format.upper()
-    options: dict[str, object] = {}
-    if source and settings.keep_exif and source.exif:
-        options["exif"] = source.exif
-    if source and settings.keep_icc and source.icc_profile:
-        options["icc_profile"] = source.icc_profile
-    if fmt == "JPEG":
-        options.update(quality=settings.quality, optimize=True, progressive=True, subsampling="4:2:0")
-        _flatten_rgba(preview).save(buffer, fmt, **options)
-    elif fmt == "WEBP":
-        options.update(quality=settings.quality, method=4)
-        preview.save(buffer, fmt, **options)
-    else:
-        options["compress_level"] = round((100 - settings.quality) * 9 / 100)
-        preview.save(buffer, "PNG", **options)
-    return buffer.tell()
+    return len(encode_image(preview, settings, source))

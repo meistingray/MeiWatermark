@@ -75,6 +75,7 @@ class ExportSettings:
     keep_icc: bool = True
     suffix: str = "_watermarked"
     output_path: str = ""
+    max_size_kb: int = 0
 
 
 def default_font_path() -> str | None:

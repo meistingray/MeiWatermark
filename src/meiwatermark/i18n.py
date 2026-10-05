@@ -1,4 +1,8 @@
 TEXT = {
+    "大小上限": {"zh": "大小上限", "en": "Size Limit", "es": "Límite", "ja": "容量上限"},
+    "大小限制说明": {"zh": "留空或 0 表示不限制；1 KB = 1024 字节。先按尺寸上限缩放，再在质量上限内自动压缩；仍超限则继续缩小尺寸。PNG 使用无损编码。", "en": "Blank or 0 means no limit; 1 KB = 1024 bytes. Resize to the dimension ceiling, then compress within the quality ceiling. If still too large, shrink further. PNG uses lossless encoding.", "es": "Vacío o 0: sin límite; 1 KB = 1024 bytes. Ajusta las dimensiones y comprime sin superar la calidad elegida. Si aún es grande, reduce más las dimensiones. PNG usa codificación sin pérdida.", "ja": "空欄または0は制限なし。1 KB = 1024バイト。寸法の上限内でサイズを調整し、指定品質を上限に圧縮します。まだ超える場合はさらに縮小します。PNGは可逆圧縮で保存します。"},
+    "无法满足输出大小限制，请减小尺寸或提高大小上限。": {"zh": "文件头或保留信息超过大小上限，请提高上限或关闭保留 EXIF/ICC。", "en": "The file header or retained metadata exceeds the limit; increase the limit or disable EXIF/ICC retention.", "es": "La cabecera o los metadatos superan el límite; aumente el límite o desactive EXIF/ICC.", "ja": "ヘッダーまたは保持情報が上限を超えます。上限を増やすかEXIF/ICCの保持を無効にしてください。"},
+    "当前照片无法满足大小限制": {"zh": "当前照片无法满足大小限制", "en": "Current image exceeds size limit", "es": "La imagen actual supera el límite", "ja": "現在の画像はサイズ上限を超えます"},
     "Language": {"zh": "Language", "en": "Language", "es": "Idioma", "ja": "言語"},
     "关于": {"zh": "关于", "en": "About", "es": "Acerca de", "ja": "情報"},
     "打开图片": {"zh": "打开图片", "en": "Open Images", "es": "Abrir", "ja": "画像を開く"},

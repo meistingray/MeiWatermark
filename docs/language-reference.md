@@ -39,6 +39,10 @@ The application uses `src/meiwatermark/i18n.py` as the single source for visible
 | 选择水印图片 | Choose Watermark Image | Elegir imagen de marca de agua | 透かし画像を選択 |
 | 导出设置 | Export Settings | Ajustes de exportación | 書き出し設定 |
 | 格式 / 质量 | Format / Quality | Formato / Calidad | 形式 / 品質 |
+| 大小上限 (KB) | Size Limit (KB) | Límite (KB) | 容量上限 (KB) |
+| 留空或 0 表示不限制；1 KB = 1024 字节。先应用尺寸约束，再在质量上限内自动压缩。PNG 保持无损。无法满足时请减小尺寸或提高大小上限。 | Blank or 0 means no limit; 1 KB = 1024 bytes. Resize first, then compress within the quality ceiling. PNG stays lossless. If the limit cannot be met, reduce dimensions or increase the limit. | Vacío o 0: sin límite; 1 KB = 1024 bytes. Primero se ajustan las dimensiones y después se comprime sin superar la calidad elegida. PNG sigue sin pérdida. Si no cabe, reduzca las dimensiones o aumente el límite. | 空欄または0は制限なし。1 KB = 1024バイト。サイズを調整してから指定品質を上限に圧縮します。PNGは可逆圧縮です。収まらない場合は寸法を小さくするか上限を増やしてください。 |
+| 文件头或保留信息超过大小上限，请提高上限或关闭保留 EXIF/ICC。 | The file header or retained metadata exceeds the limit; increase the limit or disable EXIF/ICC retention. | La cabecera o los metadatos superan el límite; aumente el límite o desactive EXIF/ICC. | ヘッダーまたは保持情報が上限を超えます。上限を増やすかEXIF/ICCの保持を無効にしてください。 |
+| 当前照片无法满足大小限制 | Current image exceeds size limit | La imagen actual supera el límite | 現在の画像はサイズ上限を超えます |
 | 尺寸约束 | Resize Limit | Límite de tamaño | サイズ制限 |
 | 约束数值 | Limit Value | Valor límite | 制限値 |
 | 不约束 / 最长边 / 最短边 / 比例 | No Limit / Long Edge / Short Edge / Scale | Sin límite / Lado largo / Lado corto / Escala | 制限なし / 長辺 / 短辺 / 倍率 |

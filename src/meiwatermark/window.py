@@ -306,6 +306,7 @@ class MainWindow(QMainWindow):
             self.add_layer(layer)
         self.format.setCurrentText(settings.format)
         self.quality.setValue(settings.quality)
+        self.max_size_kb.setText(str(settings.max_size_kb) if settings.max_size_kb else "")
         self.resize_mode.setCurrentIndex(list(ResizeMode).index(settings.resize_mode))
         self.resize_value.setText(str(round(settings.resize_value)) if settings.resize_value else "")
         self.allow_upscale.setChecked(not settings.allow_upscale)
@@ -490,8 +491,6 @@ class MainWindow(QMainWindow):
         self.format = QComboBox()
         self.format.addItems(["JPEG", "PNG", "WEBP"])
         form.addRow(self.t("格式"), self.format)
-        self.quality, self.quality_number = self._slider_editor(1, 100, 100, 100)
-        form.addRow(self.t("质量"), self._slider_widget(self.quality, self.quality_number))
         self.resize_mode = QComboBox()
         self.resize_mode.addItems([self.t(value) for value in ("不约束", "最长边", "最短边", "比例")])
         form.addRow(self.t("尺寸约束"), self.resize_mode)
@@ -504,6 +503,13 @@ class MainWindow(QMainWindow):
         self.allow_upscale = QCheckBox(self.t("不放大"))
         self.allow_upscale.setChecked(True)
         form.addRow(self.allow_upscale)
+        self.quality, self.quality_number = self._slider_editor(1, 100, 100, 100)
+        form.addRow(self.t("质量"), self._slider_widget(self.quality, self.quality_number))
+        self.max_size_kb = QLineEdit()
+        self.max_size_kb.setValidator(QIntValidator(0, 1000000000, self))
+        self.max_size_kb.setPlaceholderText(self.t("不约束"))
+        self.max_size_kb.setToolTip(self.t("大小限制说明"))
+        form.addRow(f"{self.t('大小上限')} (KB)", self.max_size_kb)
         self.keep_exif = QCheckBox(self.t("保留 EXIF"))
         self.keep_exif.setChecked(True)
         form.addRow(self.keep_exif)
@@ -541,6 +547,7 @@ class MainWindow(QMainWindow):
         self.export_button.clicked.connect(self.export_batch)
         layout.addWidget(self.export_button)
         self.quality.valueChanged.connect(self.update_export_settings)
+        self.max_size_kb.textChanged.connect(self.update_export_settings)
         self.format.currentTextChanged.connect(self.update_export_settings)
         self.resize_mode.currentIndexChanged.connect(lambda *_: self.resize_mode_changed())
         self.resize_value.textChanged.connect(self.update_export_settings)
@@ -1283,6 +1290,7 @@ class MainWindow(QMainWindow):
         self.resize_value.setEnabled(self.resize_mode.currentIndex() > 0)
         modes = [ResizeMode.NONE, ResizeMode.LONG_EDGE, ResizeMode.SHORT_EDGE, ResizeMode.SCALE]
         self.settings = ExportSettings(
+            max_size_kb=int(self.max_size_kb.text() or 0),
             format=self.format.currentText(), quality=self.quality.value(), resize_mode=modes[self.resize_mode.currentIndex()],
             resize_value=float(self.resize_value.text() or 0), allow_upscale=not self.allow_upscale.isChecked(), keep_exif=self.keep_exif.isChecked(), keep_icc=self.keep_icc.isChecked(), output_path=self.output_path.text().strip(),
         )
@@ -1324,6 +1332,7 @@ class MainWindow(QMainWindow):
         self._estimate_active_keys = {task[0]}
         worker.estimated.connect(self._store_estimate)
         worker.failed.connect(lambda key: self._store_estimate(key, None))
+        worker.limit_exceeded.connect(lambda key: self._store_estimate(key, -1))
         worker.finished.connect(lambda current=worker: self._estimate_finished(current))
         worker.finished.connect(worker.deleteLater)
         worker.start()
@@ -1336,7 +1345,7 @@ class MainWindow(QMainWindow):
         except OSError:
             source = str(path), 0, 0
         settings = self.settings
-        export = settings.format, settings.quality, settings.resize_mode, settings.resize_value, settings.allow_upscale, settings.keep_exif, settings.keep_icc
+        export = settings.max_size_kb, settings.format, settings.quality, settings.resize_mode, settings.resize_value, settings.allow_upscale, settings.keep_exif, settings.keep_icc
         return source, export, tuple(repr(layer) for layer in self.layers)
 
     def _selected_path(self) -> Path | None:
@@ -1352,6 +1361,9 @@ class MainWindow(QMainWindow):
             selected = self._selected_path()
             key = self._estimate_key(selected) if selected is not None else None
         current = self._estimate_cache.get(key) if key is not None else None
+        if current == -1:
+            self.current_estimate.setText(self.t("当前照片无法满足大小限制"))
+            return
         self.current_estimate.setText(self.t("当前照片约 {size}").format(size=self._bytes(current)) if current is not None else self.t("当前照片约 —"))
 
     def _estimate_finished(self, worker: EstimateWorker) -> None:
@@ -1422,6 +1434,7 @@ class MainWindow(QMainWindow):
             self.add_layer(layer)
         self.format.setCurrentText(settings.format)
         self.quality.setValue(settings.quality)
+        self.max_size_kb.setText(str(settings.max_size_kb) if settings.max_size_kb else "")
         self.resize_mode.setCurrentIndex(list(ResizeMode).index(settings.resize_mode))
         self.resize_value.setText(str(round(settings.resize_value)) if settings.resize_value else "")
         self.allow_upscale.setChecked(not settings.allow_upscale)
@@ -1438,7 +1451,7 @@ class MainWindow(QMainWindow):
         destination = self.settings.output_path or QFileDialog.getExistingDirectory(self, self.t("选择导出路径"))
         if not destination:
             return
-        self.worker = ExportWorker(list(self.paths), Path(destination), deepcopy(self.layers), replace(self.settings))
+        self.worker = ExportWorker(list(self.paths), Path(destination), deepcopy(self.layers), replace(self.settings), self.t("无法满足输出大小限制，请减小尺寸或提高大小上限。"))
         self.worker.progressed.connect(lambda current, total, name: self.status.showMessage(self.t("导出 {current}/{total}: {name}").format(current=current, total=total, name=name)))
         self.worker.finished_batch.connect(self.export_finished)
         self.worker.finished.connect(lambda current=self.worker: self._export_worker_finished(current))

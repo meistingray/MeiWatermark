@@ -18,6 +18,31 @@ from meiwatermark.window import LayerDelegate, LayerList, MainWindow, ThumbnailD
 
 
 class WindowTests(unittest.TestCase):
+    def test_size_limit_updates_settings_cache_key_and_survives_language_switch(self) -> None:
+        window = MainWindow()
+        key = window._estimate_key(Path("photo.jpg"))
+        window.max_size_kb.setText("500")
+        self.assertEqual(window.settings.max_size_kb, 500)
+        self.assertNotEqual(window._estimate_key(Path("photo.jpg")), key)
+        window.set_language("en")
+        self.assertEqual(window.max_size_kb.text(), "500")
+        self.assertEqual(window.settings.max_size_kb, 500)
+        window.max_size_kb.clear()
+        self.assertEqual(window.settings.max_size_kb, 0)
+        window.close()
+
+    def test_size_limit_preset_updates_the_input(self) -> None:
+        with TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}):
+            save_preset("limited", [], ExportSettings(max_size_kb=500))
+            window = MainWindow()
+            window.apply_preset("limited")
+            self.assertEqual(window.max_size_kb.text(), "500")
+            self.assertEqual(window.settings.max_size_kb, 500)
+            window._store_estimate(window._estimate_key(Path("photo.jpg")), -1)
+            window._refresh_estimate_labels(window._estimate_key(Path("photo.jpg")))
+            self.assertEqual(window.current_estimate.text(), window.t("当前照片无法满足大小限制"))
+            window.close()
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
